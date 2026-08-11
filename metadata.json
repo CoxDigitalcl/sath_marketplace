@@ -1,0 +1,5 @@
+{
+  "name": "Serviciosatuhogar",
+  "description": "Una completa plataforma de marketplace que conecta a proveedores de servicios profesionales con clientes en Chile. Cuenta con perfiles detallados de proveedores, un sistema de pago seguro con depósito en garantía (escrow) y un sólido mecanismo de reseñas para garantizar la calidad y la confianza.",
+  "requestFramePermissions": []
+}

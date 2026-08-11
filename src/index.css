@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Dynamic Theme System ===== */
+/* Default: Client (Calipso) */
+:root,
+[data-theme="client"] {
+    --color-brand-primary: #00838f;
+    --color-brand-accent: #006064;
+    --color-brand-light: #e0f7fa;
+    --color-brand-primary-rgb: 0, 131, 143;
+}
+
+/* Provider (Orange) */
+[data-theme="provider"] {
+    --color-brand-primary: #ff6200;
+    --color-brand-accent: #e55800;
+    --color-brand-light: #fff3e0;
+    --color-brand-primary-rgb: 255, 98, 0;
+}
+
+/* Smooth theme transition on all themed elements */
+*,
+*::before,
+*::after {
+    transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, fill 0.4s ease;
+}
+
+/* Custom Global Styles */
+body {
+    background-color: #f9fafb;
+    /* gray-50 */
+}
+
+/* Utilities */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
