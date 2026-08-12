@@ -53,6 +53,14 @@ export const hashBookingRequest = ({ actorScope, payload }) =>
         .update(stableJson({ operation: 'create-booking', actorScope, payload }))
         .digest('hex');
 
+export const createGuestActorScope = (email) => {
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) {
+        throw new BookingIntegrityError('INVALID_BOOKING_ACTOR', 'El correo del invitado no es válido.', 400);
+    }
+    return `guest:${crypto.createHash('sha256').update(normalized).digest('hex')}`;
+};
+
 export const normalizeIdempotencyKey = (value) => {
     const key = typeof value === 'string' ? value.trim() : '';
     if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
@@ -599,6 +607,7 @@ export default {
     buildAgendaSlots,
     confirmBookingSlots,
     createBookingPaymentIntent,
+    createGuestActorScope,
     hashBookingRequest,
     normalizeBookingDate,
     normalizeIdempotencyKey,
