@@ -128,7 +128,10 @@ export const validatePaykuPaymentVerification = ({ booking, callback, verificati
     if (verifiedVerificationKey !== callback.verificationKey) {
         return failure('VERIFIED_VERIFICATION_KEY_MISMATCH');
     }
-    if ((callback.transactionKey || verifiedTransactionKey) && callback.transactionKey !== verifiedTransactionKey) {
+    // Payku may include transaction_key in the callback while omitting it from
+    // the authoritative GET response. Compare it only when verification exposes
+    // a value; the mandatory gateway and verification identifiers above remain bound.
+    if (verifiedTransactionKey && callback.transactionKey !== verifiedTransactionKey) {
         return failure('VERIFIED_TRANSACTION_KEY_MISMATCH');
     }
 
