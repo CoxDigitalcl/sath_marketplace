@@ -4,11 +4,17 @@ import { verifyTransaction } from '../services/payku.js';
 import { createPaymentConfirmationEffects } from '../services/paymentConfirmationEffects.js';
 import { createPaymentOutboxWorker } from '../services/paymentOutboxWorker.js';
 import { createPaykuPaymentProcessor } from '../services/paykuPaymentProcessor.js';
+import { confirmBookingSlots } from '../services/bookingIntegrity.js';
 
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const PAID_STATUSES = new Set(['in_escrow', 'service_completed', 'released', 'disputed']);
 
-const processor = createPaykuPaymentProcessor({ pool, verifyTransaction, logger });
+const processor = createPaykuPaymentProcessor({
+    pool,
+    verifyTransaction,
+    confirmBookingSlots,
+    logger,
+});
 const effectHandlers = createPaymentConfirmationEffects({ pool, log: logger });
 const outboxWorker = createPaymentOutboxWorker({ pool, handlers: effectHandlers, logger });
 
