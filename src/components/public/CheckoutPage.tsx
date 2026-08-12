@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Page } from '../../types';
 import type { LogisticsPlan } from '../../types';
 import type { GeoSearchResult } from '../../services/geo/types';
@@ -51,6 +51,10 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
     // Steps: 0: Identification, 1: Review, 2: Payment, 3: Success
     const [step, setStep] = useState(0);
     const [processing, setProcessing] = useState(false);
+    const idempotencyKeyRef = useRef(
+        globalThis.crypto?.randomUUID?.() ||
+        `booking-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
 
     // Register Modal State
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -146,6 +150,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                 const bookingPayload: any = {
                     service_id: service.id,
                     scheduled_date: scheduledDate,
+                    booking_date: booking.date,
                     selected_times: selectedTimesArray,
                     service_region_code: selectedRegionCode || null,
                     service_region_name: service?.coverage_region_name || null,
@@ -167,11 +172,14 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                     bookingPayload.freight_logistics = freightData.plan;
                 }
 
-                response = await api.post('/bookings', bookingPayload);
+                response = await api.post('/bookings', bookingPayload, {
+                    headers: { 'Idempotency-Key': idempotencyKeyRef.current },
+                });
             } else {
                 const guestPayload: any = {
                     service_id: service.id,
                     scheduled_date: scheduledDate,
+                    booking_date: booking.date,
                     selected_times: selectedTimesArray,
                     service_region_code: selectedRegionCode || null,
                     service_region_name: service?.coverage_region_name || null,
@@ -195,7 +203,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                     guestPayload.freight_logistics = freightData.plan;
                 }
 
-                response = await api.post('/bookings/guest', guestPayload);
+                response = await api.post('/bookings/guest', guestPayload, {
+                    headers: { 'Idempotency-Key': idempotencyKeyRef.current },
+                });
             }
 
             if (response.data.status === 'success') {
