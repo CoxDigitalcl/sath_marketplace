@@ -213,9 +213,18 @@ export const buildAgendaSlots = ({ service, bookingDate }) => {
     return [...new Set(slots)].sort();
 };
 
-export const normalizeRequestedSlots = ({ service, bookingDate, selectedTimes }) => {
+export const normalizeRequestedSlots = ({
+    service,
+    bookingDate,
+    selectedTimes,
+    allowFlexibleSchedule = false,
+}) => {
     const raw = Array.isArray(selectedTimes) ? selectedTimes : [];
     const unique = [...new Set(raw.map((value) => String(value || '').trim()))];
+
+    if (allowFlexibleSchedule && unique.length === 1 && unique[0] === 'a_convenir') {
+        return [];
+    }
 
     if (service?.availability_type !== 'agenda') {
         return [];
@@ -350,6 +359,7 @@ export const createBookingPaymentIntent = async ({
     bookingDate,
     selectedTimes,
     service,
+    allowFlexibleSchedule = false,
     insertQuery,
     insertValues,
     pricing,
@@ -363,7 +373,12 @@ export const createBookingPaymentIntent = async ({
         throw new BookingIntegrityError('INVALID_BOOKING_ACTOR', 'No se pudo identificar al solicitante.', 400);
     }
 
-    const normalizedSlots = normalizeRequestedSlots({ service, bookingDate, selectedTimes });
+    const normalizedSlots = normalizeRequestedSlots({
+        service,
+        bookingDate,
+        selectedTimes,
+        allowFlexibleSchedule,
+    });
     const scheduledTime = normalizedSlots[0] || '12:00';
     const scheduledDate = toSantiagoInstant(bookingDate, scheduledTime);
     const requestHash = hashBookingRequest({ actorScope, payload: requestPayload });
