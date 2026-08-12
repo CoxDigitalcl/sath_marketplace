@@ -1,25 +1,9 @@
 import axios from 'axios';
 
 import logger from '../config/logger.js';
+import { getPaykuRuntimeConfig } from './paykuConfig.js';
 
 export { createTransaction } from './payku.legacy.js';
-
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const SANDBOX_API_URL = 'https://des.payku.cl/api';
-
-const getPaykuVerificationConfig = () => {
-    const apiUrl = process.env.PAYKU_API_URL || (IS_PRODUCTION ? null : SANDBOX_API_URL);
-    const publicToken = process.env.PAYKU_PUBLIC_TOKEN || (IS_PRODUCTION ? null : 'demo');
-
-    if (!apiUrl || !publicToken) {
-        throw new Error('Payku verification configuration is incomplete.');
-    }
-    if (IS_PRODUCTION && (publicToken === 'demo' || apiUrl.includes('des.payku.cl'))) {
-        throw new Error('Payku production verification points to sandbox/demo credentials.');
-    }
-
-    return { apiUrl, publicToken };
-};
 
 const safeIdentifier = (value) => String(value ?? '').replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, 128);
 
@@ -31,7 +15,7 @@ export const verifyTransaction = async (transactionId) => {
         throw error;
     }
 
-    const { apiUrl, publicToken } = getPaykuVerificationConfig();
+    const { apiUrl, publicToken } = getPaykuRuntimeConfig();
 
     try {
         const response = await axios.get(
