@@ -298,12 +298,14 @@ export const createBooking = async (req, res, next) => {
 
         // The calendar date is interpreted explicitly in the marketplace time zone.
         const normalizedBookingDate = normalizeBookingDate(booking_date, scheduled_date);
-        const todayInChile = new Intl.DateTimeFormat('en-CA', {
+        const todayParts = new Intl.DateTimeFormat('en-CA', {
             timeZone: 'America/Santiago',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
-        }).format(new Date());
+        }).formatToParts(new Date());
+        const todayValues = Object.fromEntries(todayParts.map(({ type, value }) => [type, value]));
+        const todayInChile = `${todayValues.year}-${todayValues.month}-${todayValues.day}`;
         if (normalizedBookingDate < todayInChile) {
             return res.status(400).json({ status: 'error', message: 'La fecha de reserva debe ser hoy o una fecha futura.' });
         }
@@ -359,6 +361,7 @@ export const createBooking = async (req, res, next) => {
             bookingDate: normalizedBookingDate,
             selectedTimes: selected_times,
             service,
+            allowFlexibleSchedule: Boolean(freightValidation.freightRoute),
             insertQuery,
             insertValues: (canonicalScheduledDate) => [
                 clientId,
@@ -442,12 +445,14 @@ export const createGuestBooking = async (req, res, next) => {
 
         // The calendar date is interpreted explicitly in the marketplace time zone.
         const normalizedBookingDate = normalizeBookingDate(booking_date, scheduled_date);
-        const todayInChile = new Intl.DateTimeFormat('en-CA', {
+        const todayParts = new Intl.DateTimeFormat('en-CA', {
             timeZone: 'America/Santiago',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
-        }).format(new Date());
+        }).formatToParts(new Date());
+        const todayValues = Object.fromEntries(todayParts.map(({ type, value }) => [type, value]));
+        const todayInChile = `${todayValues.year}-${todayValues.month}-${todayValues.day}`;
         if (normalizedBookingDate < todayInChile) {
             return res.status(400).json({ status: 'error', message: 'La fecha de reserva debe ser hoy o una fecha futura.' });
         }
@@ -503,6 +508,7 @@ export const createGuestBooking = async (req, res, next) => {
             bookingDate: normalizedBookingDate,
             selectedTimes: selected_times,
             service,
+            allowFlexibleSchedule: Boolean(freightValidation.freightRoute),
             insertQuery,
             insertValues: (canonicalScheduledDate) => [
                 service.id,
