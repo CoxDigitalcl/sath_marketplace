@@ -14,6 +14,8 @@ const outboxWorker = createPaymentOutboxWorker({ pool, handlers: effectHandlers,
 
 let stopOutboxWorker = null;
 
+const isPaymentOutboxEnabled = () => process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true';
+
 const getCorrelationId = (req) => {
     const candidate = req.id || req.get?.('x-request-id');
     return typeof candidate === 'string' && /^[a-zA-Z0-9._:-]{1,128}$/.test(candidate)
@@ -44,7 +46,7 @@ export const handlePaykuWebhook = async (req, res) => {
         });
     }
 
-    if (result.outcome === 'confirmed') {
+    if (result.outcome === 'confirmed' && isPaymentOutboxEnabled()) {
         void outboxWorker.processBatch().catch((error) => {
             logger.error('[Payment Outbox] Immediate drain failed', {
                 errorCode: error?.code || 'PAYMENT_OUTBOX_DRAIN_FAILED',
