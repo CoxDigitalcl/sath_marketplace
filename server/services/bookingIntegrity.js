@@ -513,7 +513,48 @@ export const createBookingPaymentIntent = async ({
     return { httpStatus: 201, body, replayed: false };
 };
 
+export const lockBookingProviderForPayment = async (client, {
+    bookingId,
+    paymentKey,
+} = {}) => {
+    const providerResult = await client.query(
+        `SELECT provider_id
+         FROM bookings
+         WHERE id = $1 AND transaction_id = $2
+         LIMIT 2`,
+        [bookingId, paymentKey]
+    );
+    if (providerResult.rows.length !== 1) {
+        throw new BookingIntegrityError(
+            'BOOKING_PAYMENT_BINDING_CONFLICT',
+            'La referencia de pago no pertenece a una reserva única.',
+            409
+        );
+    }
+    await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 19417))',
+        [providerResult.rows[0].provider_id]
+    );
+};
+
 export const confirmBookingSlots = async (client, bookingId) => {
+    const providerResult = await client.query(
+        `SELECT provider_id
+         FROM booking_slots
+         WHERE booking_id = $1
+         LIMIT 1`,
+        [bookingId]
+    );
+    if (providerResult.rows.length === 0) return { displacedBookingIds: [] };
+
+    await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 19417))',
+        [providerResult.rows[0].provider_id]
+    );
+
+    // The provider lock must be acquired before any row lock. This prevents
+    // two payment transactions from each holding one row while waiting on the
+    // other transaction's provider lock.
     const slotResult = await client.query(
         `SELECT id, provider_id, starts_at, ends_at
          FROM booking_slots
@@ -521,14 +562,6 @@ export const confirmBookingSlots = async (client, bookingId) => {
          ORDER BY starts_at
          FOR UPDATE`,
         [bookingId]
-    );
-
-    if (slotResult.rows.length === 0) return { displacedBookingIds: [] };
-
-    const providerId = slotResult.rows[0].provider_id;
-    await client.query(
-        'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 19417))',
-        [providerId]
     );
 
     const confirmedConflict = await client.query(
