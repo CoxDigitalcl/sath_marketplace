@@ -26,6 +26,12 @@ coverage
 *.codex-backup
 /test.js
 
+# cPanel production state and large persistent media
+/uploads/
+/private_uploads/
+/tmp/
+/public/videos/*.mp4
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
