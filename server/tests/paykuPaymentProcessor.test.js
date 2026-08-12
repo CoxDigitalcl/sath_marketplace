@@ -183,3 +183,22 @@ test('fails closed when Payku verification is unavailable', async () => {
     assert.deepEqual(result, { outcome: 'retry', code: 'PAYKU_VERIFICATION_UNAVAILABLE' });
     assert.equal(harness.calls.some((call) => call.sql === 'BEGIN'), false);
 });
+
+test('fails closed and rolls back when another paid booking owns the slot', async () => {
+    const harness = createHarness();
+    const processor = createPaykuPaymentProcessor({
+        ...harness,
+        confirmBookingSlots: async () => {
+            const error = new Error('slot already confirmed');
+            error.code = 'BOOKING_SLOT_CONFLICT';
+            throw error;
+        },
+    });
+
+    const result = await processor.processWebhook(callbackPayload());
+
+    assert.deepEqual(result, { outcome: 'rejected', code: 'BOOKING_SLOT_CONFLICT' });
+    assert.equal(harness.calls.some((call) => call.sql === 'ROLLBACK'), true);
+    assert.equal(harness.calls.some((call) => call.sql.startsWith('INSERT INTO payment_webhook_events')), false);
+    assert.equal(harness.calls.some((call) => call.sql.startsWith('UPDATE bookings')), false);
+});
