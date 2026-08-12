@@ -105,3 +105,23 @@ test('state machine rejects role bypasses and invalid races', () => {
         clientId: 'client-1',
     }).code, 'BOOKING_TRANSITION_FORBIDDEN');
 });
+
+test('only an explicitly verified flexible checkout can bypass fixed agenda slots', () => {
+    assert.deepEqual(
+        normalizeRequestedSlots({
+            service: agendaService,
+            bookingDate: '2026-08-12',
+            selectedTimes: ['a_convenir'],
+            allowFlexibleSchedule: true,
+        }),
+        []
+    );
+    assert.throws(
+        () => normalizeRequestedSlots({
+            service: agendaService,
+            bookingDate: '2026-08-12',
+            selectedTimes: ['a_convenir'],
+        }),
+        (error) => error.code === 'INVALID_BOOKING_SLOT'
+    );
+});
