@@ -28,7 +28,12 @@ const rollbackQuietly = async (client) => {
     }
 };
 
-export const createPaykuPaymentProcessor = ({ pool, verifyTransaction, logger = noopLogger } = {}) => {
+export const createPaykuPaymentProcessor = ({
+    pool,
+    verifyTransaction,
+    confirmBookingSlots = async () => ({ displacedBookingIds: [] }),
+    logger = noopLogger,
+} = {}) => {
     if (!pool?.query || !pool?.connect) {
         throw new TypeError('A PostgreSQL-compatible pool is required');
     }
@@ -173,6 +178,8 @@ export const createPaykuPaymentProcessor = ({ pool, verifyTransaction, logger = 
                 return { outcome: 'rejected', code: 'BOOKING_STATE_CONFLICT' };
             }
 
+            await confirmBookingSlots(client, verified.value.bookingId);
+
             await client.query(
                 `INSERT INTO payment_webhook_events (
                     provider,
@@ -249,15 +256,23 @@ export const createPaykuPaymentProcessor = ({ pool, verifyTransaction, logger = 
                 await rollbackQuietly(client);
             }
 
-            const conflict = error?.code === '23505';
+            const paymentConflict = error?.code === '23505';
+            const slotConflict = [
+                'BOOKING_SLOT_CONFLICT',
+                'BOOKING_SLOT_STATE_CONFLICT',
+                '23P01',
+            ].includes(error?.code);
+            const code = slotConflict
+                ? 'BOOKING_SLOT_CONFLICT'
+                : (paymentConflict ? 'PAYMENT_EVENT_CONFLICT' : 'DATABASE_ERROR');
             logger.error('[Payku Webhook] Atomic processing failed', {
-                code: conflict ? 'PAYMENT_EVENT_CONFLICT' : (error?.code || 'DATABASE_ERROR'),
+                code,
                 bookingId: verified.value.bookingId,
                 correlationId,
             });
             return {
-                outcome: conflict ? 'rejected' : 'retry',
-                code: conflict ? 'PAYMENT_EVENT_CONFLICT' : 'DATABASE_ERROR',
+                outcome: slotConflict || paymentConflict ? 'rejected' : 'retry',
+                code,
             };
         } finally {
             client.release();
