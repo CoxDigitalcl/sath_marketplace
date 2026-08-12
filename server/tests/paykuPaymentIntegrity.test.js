@@ -116,6 +116,24 @@ test('rejects callback and verified verification key mismatch', () => {
   assert.deepEqual(result, { ok: false, code: 'VERIFIED_VERIFICATION_KEY_MISMATCH' });
 });
 
+test('accepts a callback transaction key when Payku omits it from verification', () => {
+  const verification = validVerification();
+  verification.payment.transaction_key = null;
+
+  const result = validatePaykuPaymentVerification(buildContext({ verification }));
+
+  assert.equal(result.ok, true);
+});
+
+test('rejects a missing callback transaction key when verification provides one', () => {
+  const payload = validPayload();
+  delete payload.transaction_key;
+
+  const result = validatePaykuPaymentVerification(buildContext({ payload }));
+
+  assert.deepEqual(result, { ok: false, code: 'VERIFIED_TRANSACTION_KEY_MISMATCH' });
+});
+
 test('fails closed when amount or currency are missing, malformed, or different', () => {
   const cases = [
     [{ ...validVerification(), amount: undefined }, 'MISSING_VERIFIED_AMOUNT'],
