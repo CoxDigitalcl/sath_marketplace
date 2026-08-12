@@ -101,7 +101,7 @@ export const updateBookingStatus = async (req, res, next) => {
             await client.query(
                 `UPDATE booking_slots
                  SET state = 'cancelled', hold_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-                 WHERE booking_id = $1 AND state IN ('held', 'released')`,
+                 WHERE booking_id = $1 AND state IN ('held', 'released', 'confirmed')`,
                 [bookingId]
             );
         }
