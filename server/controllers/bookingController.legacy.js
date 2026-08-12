@@ -3,6 +3,12 @@ import logger from '../config/logger.js';
 import { createInAppNotification } from './notificationController.js';
 import { calculateServicePricing, ensureBookingPricingColumns, getBookingPricingFromRow } from '../services/commissionService.js';
 import { validateCheckoutCoverage } from '../../shared/chileLocations.js';
+import {
+    BookingIntegrityError,
+    createBookingPaymentIntent,
+    createGuestActorScope,
+    normalizeBookingDate,
+} from '../services/bookingIntegrity.js';
 
 let freightColumnsPromise = null;
 
@@ -259,6 +265,7 @@ export const createBooking = async (req, res, next) => {
         const {
             service_id,
             scheduled_date,
+            booking_date,
             service_commune,
             selected_times = [],
             freight_route,
@@ -289,11 +296,15 @@ export const createBooking = async (req, res, next) => {
             return res.status(403).json({ status: 'error', message: 'Este proveedor aún no ha sido verificado. No se pueden crear reservas.' });
         }
 
-        // MED-05: Validate scheduled_date is not in the past
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const bookingDate = new Date(scheduled_date);
-        if (isNaN(bookingDate.getTime()) || bookingDate < today) {
+        // The calendar date is interpreted explicitly in the marketplace time zone.
+        const normalizedBookingDate = normalizeBookingDate(booking_date, scheduled_date);
+        const todayInChile = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Santiago',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(new Date());
+        if (normalizedBookingDate < todayInChile) {
             return res.status(400).json({ status: 'error', message: 'La fecha de reserva debe ser hoy o una fecha futura.' });
         }
 
@@ -341,53 +352,45 @@ export const createBooking = async (req, res, next) => {
             RETURNING *
         `;
 
-        const bookingRes = await pool.query(insertQuery, [
-            clientId,
-            service.id,
-            service.provider_id,
-            pricing.totalAmount,
-            scheduled_date,
-            canonicalRegion.serviceRegionCode,
-            canonicalRegion.serviceRegionName,
-            service_commune || null,
-            JSON.stringify(selected_times),
-            durationHours,
-            pricing.baseAmount,
-            pricing.platformFee,
-            pricing.commissionRate,
-            pricing.commissionType,
-            pricing.fixedCommission,
-            ...buildFreightBookingValues(freightValidation.freightRoute, freightValidation.freightLogistics)
-        ]);
-        const booking = bookingRes.rows[0];
-
-        // 4. Initiate Payku Transaction
-        // Dynamic import to avoid issues if module missing during dev, though we just created it.
-        const payku = await import('../services/payku.js');
-
-        const transaction = await payku.createTransaction(
-            booking.id,
-            pricing.totalAmount,
-            clientEmail,
-            `Reserva: ${service.title}`
-        );
-
-        // Save Payku transaction ID for later verification
-        if (transaction.id) {
-            await pool.query('UPDATE bookings SET transaction_id = $1 WHERE id = $2', [transaction.id, booking.id]);
-        }
-
-        res.status(201).json({
-            status: 'success',
-            message: 'Booking initialized. Redirecting to payment...',
-            booking: { ...booking, pricing },
-            paymentUrl: transaction.url, // URL to redirect user
-            token: transaction.token
+        const creation = await createBookingPaymentIntent({
+            actorScope: `user:${clientId}`,
+            idempotencyKey: req.get('idempotency-key'),
+            requestPayload: req.body,
+            bookingDate: normalizedBookingDate,
+            selectedTimes: selected_times,
+            service,
+            insertQuery,
+            insertValues: (canonicalScheduledDate) => [
+                clientId,
+                service.id,
+                service.provider_id,
+                pricing.totalAmount,
+                canonicalScheduledDate,
+                canonicalRegion.serviceRegionCode,
+                canonicalRegion.serviceRegionName,
+                service_commune || null,
+                JSON.stringify(selected_times),
+                durationHours,
+                pricing.baseAmount,
+                pricing.platformFee,
+                pricing.commissionRate,
+                pricing.commissionType,
+                pricing.fixedCommission,
+                ...buildFreightBookingValues(freightValidation.freightRoute, freightValidation.freightLogistics)
+            ],
+            pricing,
+            payerEmail: clientEmail,
+            subject: `Reserva: ${service.title}`,
         });
+        if (creation.replayed) res.set('Idempotent-Replay', 'true');
+        return res.status(creation.httpStatus).json(creation.body);
 
     } catch (err) {
         logger.error(`Create Booking Error: ${err.message}`);
-        next(err);
+        if (err instanceof BookingIntegrityError) {
+            return res.status(err.statusCode).json({ status: 'error', code: err.code, message: err.message });
+        }
+        return next(err);
     }
 };
 
@@ -398,6 +401,7 @@ export const createGuestBooking = async (req, res, next) => {
         const {
             service_id,
             scheduled_date,
+            booking_date,
             service_commune,
             guest_name,
             guest_email,
@@ -436,11 +440,15 @@ export const createGuestBooking = async (req, res, next) => {
             return res.status(403).json({ status: 'error', message: 'Este proveedor aún no ha sido verificado. No se pueden crear reservas.' });
         }
 
-        // MED-05: Validate scheduled_date is not in the past
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const bookingDate = new Date(scheduled_date);
-        if (isNaN(bookingDate.getTime()) || bookingDate < today) {
+        // The calendar date is interpreted explicitly in the marketplace time zone.
+        const normalizedBookingDate = normalizeBookingDate(booking_date, scheduled_date);
+        const todayInChile = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Santiago',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(new Date());
+        if (normalizedBookingDate < todayInChile) {
             return res.status(400).json({ status: 'error', message: 'La fecha de reserva debe ser hoy o una fecha futura.' });
         }
 
@@ -488,54 +496,47 @@ export const createGuestBooking = async (req, res, next) => {
             RETURNING *
         `;
 
-        const bookingRes = await pool.query(insertQuery, [
-            service.id,
-            service.provider_id,
-            pricing.totalAmount,
-            scheduled_date,
-            canonicalRegion.serviceRegionCode,
-            canonicalRegion.serviceRegionName,
-            service_commune || null,
-            guest_name,
-            guest_email,
-            guest_phone,
-            JSON.stringify(selected_times),
-            durationHours,
-            pricing.baseAmount,
-            pricing.platformFee,
-            pricing.commissionRate,
-            pricing.commissionType,
-            pricing.fixedCommission,
-            ...buildFreightBookingValues(freightValidation.freightRoute, freightValidation.freightLogistics)
-        ]);
-        const booking = bookingRes.rows[0];
-
-        // 3. Initiate Payku Transaction
-        const payku = await import('../services/payku.js');
-
-        const transaction = await payku.createTransaction(
-            booking.id,
-            pricing.totalAmount,
-            guest_email,
-            `Reserva Invitado: ${service.title}`
-        );
-
-        // Save Payku transaction ID for later verification
-        if (transaction.id) {
-            await pool.query('UPDATE bookings SET transaction_id = $1 WHERE id = $2', [transaction.id, booking.id]);
-        }
-
-        res.status(201).json({
-            status: 'success',
-            message: 'Guest Booking initialized. Redirecting to payment...',
-            booking: { ...booking, pricing },
-            paymentUrl: transaction.url,
-            token: transaction.token
+        const creation = await createBookingPaymentIntent({
+            actorScope: createGuestActorScope(guest_email),
+            idempotencyKey: req.get('idempotency-key'),
+            requestPayload: req.body,
+            bookingDate: normalizedBookingDate,
+            selectedTimes: selected_times,
+            service,
+            insertQuery,
+            insertValues: (canonicalScheduledDate) => [
+                service.id,
+                service.provider_id,
+                pricing.totalAmount,
+                canonicalScheduledDate,
+                canonicalRegion.serviceRegionCode,
+                canonicalRegion.serviceRegionName,
+                service_commune || null,
+                guest_name,
+                guest_email,
+                guest_phone,
+                JSON.stringify(selected_times),
+                durationHours,
+                pricing.baseAmount,
+                pricing.platformFee,
+                pricing.commissionRate,
+                pricing.commissionType,
+                pricing.fixedCommission,
+                ...buildFreightBookingValues(freightValidation.freightRoute, freightValidation.freightLogistics)
+            ],
+            pricing,
+            payerEmail: guest_email,
+            subject: `Reserva Invitado: ${service.title}`,
         });
+        if (creation.replayed) res.set('Idempotent-Replay', 'true');
+        return res.status(creation.httpStatus).json(creation.body);
 
     } catch (err) {
         logger.error(`Create Guest Booking Error: ${err.message}`);
-        next(err);
+        if (err instanceof BookingIntegrityError) {
+            return res.status(err.statusCode).json({ status: 'error', code: err.code, message: err.message });
+        }
+        return next(err);
     }
 };
 
