@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import rateLimit from 'express-rate-limit';
 import { createBooking, createGuestBooking, getBookings, handlePaykuWebhook, checkAvailability, updateBookingStatus, checkProviderAccess, getBookingById, getPublicBookingById, verifyPayment } from '../controllers/bookingController.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireBookingCapability } from '../services/bookingCapability.js';
 import { sendEmail, sendGuestBookingConfirmation, sendCrossContactEmails } from '../services/notificationService.js';
 import { pool } from '../config/db.js';
 
@@ -13,6 +14,18 @@ const guestBookingLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 10, // 10 guest bookings per IP per hour
     message: { status: 'error', message: 'Demasiados intentos de reserva. Intenta nuevamente más tarde.' }
+});
+
+const publicBookingReadLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 40,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 'error',
+        code: 'BOOKING_READ_RATE_LIMITED',
+        message: 'Demasiadas consultas de reserva. Intenta nuevamente más tarde.',
+    },
 });
 
 const requireMaintenanceMode = (req, res, next) => {
@@ -29,11 +42,11 @@ router.post('/webhook/payku', handlePaykuWebhook);
 router.get('/availability', checkAvailability);
 
 // Payment Verification (public - works for both guests and authenticated users)
-router.get('/verify/:id', verifyPayment);
+router.get('/verify/:id', publicBookingReadLimiter, requireBookingCapability, verifyPayment);
 
 // Guest Checkout Routes
 router.post('/guest', guestBookingLimiter, createGuestBooking);
-router.get('/public/:id', getPublicBookingById);
+router.get('/public/:id', publicBookingReadLimiter, requireBookingCapability, getPublicBookingById);
 
 // ==========================================
 // FULL TRACE: Execute the ENTIRE notification flow
