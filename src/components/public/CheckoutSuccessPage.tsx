@@ -19,22 +19,38 @@ const CheckoutSuccessPage: React.FC<CheckoutSuccessPageProps> = ({ navigateTo })
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const orderId = params.get('order') || params.get('id');
+        const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const capability = fragment.get('cap');
+        let interval: ReturnType<typeof setInterval> | undefined;
+        let active = true;
 
-        if (!orderId) {
-            setVerifying(false);
-            return;
+        if (window.location.hash) {
+            window.history.replaceState(
+                null,
+                document.title,
+                `${window.location.pathname}${window.location.search}`
+            );
         }
+
+        if (!orderId || !capability) {
+            setOrderDetails(orderId ? { id: orderId } : null);
+            setVerifying(false);
+            return undefined;
+        }
+
+        const requestConfig = {
+            headers: { 'X-Booking-Capability': capability },
+        };
 
         const verifyPayment = async () => {
             try {
-                const res = await api.get(`/bookings/verify/${orderId}`);
-                if (res.data.status === 'success') {
-                    if (res.data.payment_confirmed && res.data.booking) {
-                        setOrderDetails(res.data.booking);
-                        setPaymentConfirmed(true);
-                        setVerifying(false);
-                        return true;
-                    }
+                const res = await api.get(`/bookings/verify/${orderId}`, requestConfig);
+                if (!active) return false;
+                if (res.data.status === 'success' && res.data.payment_confirmed && res.data.booking) {
+                    setOrderDetails(res.data.booking);
+                    setPaymentConfirmed(true);
+                    setVerifying(false);
+                    return true;
                 }
                 return false;
             } catch (err) {
@@ -45,40 +61,38 @@ const CheckoutSuccessPage: React.FC<CheckoutSuccessPageProps> = ({ navigateTo })
 
         const fetchPublicBooking = async () => {
             try {
-                const res = await api.get(`/bookings/public/${orderId}`);
+                const res = await api.get(`/bookings/public/${orderId}`, requestConfig);
+                if (!active) return;
                 if (res.data.status === 'success') {
                     setOrderDetails(res.data.booking);
-                    if (res.data.booking.provider_email) {
-                        setPaymentConfirmed(true);
-                    }
+                    if (res.data.booking.provider_email) setPaymentConfirmed(true);
                 }
-            } catch (err) {
-                setOrderDetails({ id: orderId });
+            } catch {
+                if (active) setOrderDetails({ id: orderId });
             }
         };
 
         const startPolling = async () => {
-            const confirmed = await verifyPayment();
-            if (confirmed) return;
+            if (await verifyPayment()) return;
+            if (!active) return;
 
-            const interval = setInterval(async () => {
+            interval = setInterval(async () => {
                 pollCountRef.current += 1;
                 if (pollCountRef.current >= maxPolls) {
-                    clearInterval(interval);
+                    if (interval) clearInterval(interval);
                     setVerifying(false);
                     await fetchPublicBooking();
                     return;
                 }
-                const confirmed = await verifyPayment();
-                if (confirmed) {
-                    clearInterval(interval);
-                }
+                if (await verifyPayment() && interval) clearInterval(interval);
             }, 3000);
-
-            return () => clearInterval(interval);
         };
 
-        startPolling();
+        void startPolling();
+        return () => {
+            active = false;
+            if (interval) clearInterval(interval);
+        };
     }, []);
 
     // Helper: format date nicely
