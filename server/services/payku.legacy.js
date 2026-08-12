@@ -11,7 +11,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  * @param {string} subject - Description of purchase
  * @returns {Promise<{id: string, url: string, token: string}>}
  */
-export const createTransaction = async (orderId, amount, email, subject) => {
+export const createTransaction = async (orderId, amount, email, subject, bookingCapability) => {
     const { apiUrl, publicToken } = getPaykuRuntimeConfig();
 
     try {
@@ -22,7 +22,7 @@ export const createTransaction = async (orderId, amount, email, subject) => {
             amount: amount,
             currency: 'CLP',
             payment: 1, // 1 = Webpay / Flow / Etc (Check Payku Docs, usually 1 or 2)
-            urlreturn: `${process.env.APP_URL || 'https://serviciosatuhogar.cl'}/checkout/success?order=${orderId}`,
+            urlreturn: `${process.env.APP_URL || 'https://serviciosatuhogar.cl'}/checkout/success?order=${orderId}${bookingCapability ? `#cap=${encodeURIComponent(bookingCapability)}` : ''}`,
             urlnotify: `${process.env.API_URL || 'https://serviciosatuhogar.cl/api'}/bookings/webhook/payku`
         };
 
@@ -55,7 +55,7 @@ export const createTransaction = async (orderId, amount, email, subject) => {
             logger.warn("Using Mock Payku Response in Sandbox Mode");
             return {
                 id: `mock_${Math.random()}`,
-                url: `${process.env.APP_URL || ''}/checkout?mock_payment=true&order=${orderId}`,
+                url: `${process.env.APP_URL || ''}/checkout/success?mock_payment=true&order=${orderId}${bookingCapability ? `#cap=${encodeURIComponent(bookingCapability)}` : ''}`,
                 token: 'mock_token'
             };
         }
