@@ -31,6 +31,7 @@ const rollbackQuietly = async (client) => {
 export const createPaykuPaymentProcessor = ({
     pool,
     verifyTransaction,
+    lockBookingProvider = async () => {},
     confirmBookingSlots = async () => ({ displacedBookingIds: [] }),
     logger = noopLogger,
 } = {}) => {
@@ -114,6 +115,13 @@ export const createPaykuPaymentProcessor = ({
         try {
             await client.query('BEGIN');
             transactionStarted = true;
+
+            // Lock the shared provider namespace before locking an individual
+            // booking row, preventing cross-booking payment deadlocks.
+            await lockBookingProvider(client, {
+                bookingId: verified.value.bookingId,
+                paymentKey: verified.value.paymentKey,
+            });
 
             const lockedResult = await client.query(
                 `SELECT id, status, amount, transaction_id
@@ -260,6 +268,7 @@ export const createPaykuPaymentProcessor = ({
             const slotConflict = [
                 'BOOKING_SLOT_CONFLICT',
                 'BOOKING_SLOT_STATE_CONFLICT',
+                'BOOKING_PAYMENT_BINDING_CONFLICT',
                 '23P01',
             ].includes(error?.code);
             const code = slotConflict
