@@ -1,22 +1,8 @@
 import axios from 'axios';
 import logger from '../config/logger.js';
+import { getPaykuRuntimeConfig } from './paykuConfig.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const SANDBOX_API_URL = 'https://des.payku.cl/api';
-
-const getPaykuConfig = () => {
-    const apiUrl = process.env.PAYKU_API_URL || (IS_PRODUCTION ? null : SANDBOX_API_URL);
-    const publicToken = process.env.PAYKU_PUBLIC_TOKEN || (IS_PRODUCTION ? null : 'demo');
-
-    if (IS_PRODUCTION) {
-        if (!apiUrl || !publicToken || publicToken === 'demo' || apiUrl.includes('des.payku.cl')) {
-            throw new Error('Payku production configuration is incomplete or points to sandbox/demo credentials.');
-        }
-    }
-
-    return { apiUrl, publicToken };
-};
-
 /**
  * Creates a Transaction in Payku
  * @param {string} orderId - Our internal Booking ID
@@ -26,7 +12,7 @@ const getPaykuConfig = () => {
  * @returns {Promise<{id: string, url: string, token: string}>}
  */
 export const createTransaction = async (orderId, amount, email, subject) => {
-    const { apiUrl, publicToken } = getPaykuConfig();
+    const { apiUrl, publicToken } = getPaykuRuntimeConfig();
 
     try {
         const payload = {
@@ -85,7 +71,7 @@ export const createTransaction = async (orderId, amount, email, subject) => {
  * @returns {Promise<{status: string, order: string, transaction_id: string}>}
  */
 export const verifyTransaction = async (transactionId) => {
-    const { apiUrl, publicToken } = getPaykuConfig();
+    const { apiUrl, publicToken } = getPaykuRuntimeConfig();
 
     try {
         const response = await axios.get(`${apiUrl}/transaction/${transactionId}`, {
