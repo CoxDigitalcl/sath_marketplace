@@ -28,6 +28,13 @@ test('public verification handler is read-only and emits private cache/index hea
     assert.match(source, /X-Robots-Tag', 'noindex, nofollow, noarchive'/);
 });
 
+test('confirmed webhooks drain effects only when the outbox worker flag is enabled', async () => {
+    const source = await readServerFile('controllers/paykuWebhookController.js');
+
+    assert.match(source, /const isPaymentOutboxEnabled = \(\) => process\.env\.ENABLE_PAYMENT_OUTBOX_WORKER === 'true'/);
+    assert.match(source, /result\.outcome === 'confirmed' && isPaymentOutboxEnabled\(\)/);
+});
+
 test('Payku verification logs bounded fields instead of the gateway payload', async () => {
     const source = await readServerFile('services/payku.js');
 
