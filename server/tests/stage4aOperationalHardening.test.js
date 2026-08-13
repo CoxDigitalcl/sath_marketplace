@@ -68,6 +68,17 @@ test('HTTPS and non-production requests continue without redirect', () => {
     assert.equal(continued, 2);
 });
 
+test('production entry point hides Express and never year-caches the HTML shell', async () => {
+    const index = await read('server/index.js');
+
+    assert.match(index, /app\.disable\('x-powered-by'\)/);
+    assert.match(index, /app\.use\(express\.static\(buildPath, \{[\s\S]*?index: false,/);
+    assert.match(
+        index,
+        /path\.extname\(filePath\).*=== '\.html'[\s\S]*?no-cache, no-store, must-revalidate/
+    );
+});
+
 test('HTTP migration, repair and debug routes are retired', async () => {
     const [adminRoutes, notificationRoutes, index] = await Promise.all([
         read('server/routes/adminRoute.js'),

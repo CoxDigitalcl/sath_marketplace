@@ -33,6 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
 // cPanel provides the PORT, but strictly default to 3001 if missing
 const PORT = process.env.PORT || 3001;
 
@@ -114,8 +115,19 @@ if (process.env.NODE_ENV === 'production') {
     const buildPath = path.join(__dirname, '..', 'dist');
 
     // Serve static assets
-    app.use('/assets', express.static(path.join(buildPath, 'assets')));
-    app.use(express.static(buildPath, { maxAge: '1y' }));
+    app.use('/assets', express.static(path.join(buildPath, 'assets'), {
+        maxAge: '1y',
+        immutable: true
+    }));
+    app.use(express.static(buildPath, {
+        index: false,
+        maxAge: '1y',
+        setHeaders: (res, filePath) => {
+            if (path.extname(filePath).toLowerCase() === '.html') {
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            }
+        }
+    }));
 
     // SSR Lite for Provider Profiles (OpenGraph Meta Tags)
     app.get('/provider/:id', async (req, res, next) => {
