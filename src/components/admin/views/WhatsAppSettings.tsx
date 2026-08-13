@@ -27,7 +27,7 @@ import {
 } from '../../common/whatsappConfig';
 
 const adminFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
     };
@@ -177,7 +177,7 @@ const WhatsAppSettings: React.FC = () => {
             return;
         }
 
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         if (!token) {
             toast.error('Sesion expirada. Inicia sesion nuevamente.');
             event.target.value = '';

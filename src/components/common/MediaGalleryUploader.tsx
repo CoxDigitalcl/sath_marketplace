@@ -23,7 +23,7 @@ const MediaGalleryUploader: React.FC<MediaGalleryUploaderProps> = ({ items, onCh
     const [uploadingCount, setUploadingCount] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const getToken = () => localStorage.getItem('auth_token');
+    const getToken = () => sessionStorage.getItem('auth_token');
 
     const uploadFile = useCallback(async (file: File): Promise<GalleryItem | null> => {
         const isImage = IMAGE_TYPES.includes(file.type);

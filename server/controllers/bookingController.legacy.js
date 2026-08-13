@@ -740,7 +740,7 @@ const sendBookingNotifications = async (bookingId) => {
             return true;
         }
     } catch (dedupErr) {
-        logger.warn(`[Notifications] Dedup check failed (${dedupErr.message}). Proceeding with send.`);
+        logger.warn('[Notifications] Dedup check failed; proceeding with send.', { bookingId, errorType: dedupErr.name });
     }
 
     try {
@@ -809,7 +809,7 @@ const sendBookingNotifications = async (bookingId) => {
                 logger.info(`[Notifications] Cross-contact emails SENT for Booking ${bookingId}`);
                 emailsSent = true;
             } catch (crossErr) {
-                logger.error(`[Notifications] Cross-contact FAILED: ${crossErr.message}`);
+                logger.error('[Notifications] Cross-contact failed.', { bookingId, errorType: crossErr.name });
             }
         } else {
             logger.error(`[Notifications] sendCrossContactEmails NOT FOUND in module!`);
@@ -820,7 +820,7 @@ const sendBookingNotifications = async (bookingId) => {
             if (notificationService.sendGuestBookingConfirmation) {
                 const guestEmail = row.guest_email || row.client_email;
                 try {
-                    logger.info(`[Notifications] Sending guest confirmation to ${guestEmail}...`);
+                    logger.info('[Notifications] Sending guest confirmation.', { bookingId });
                     await notificationService.sendGuestBookingConfirmation({
                         bookingId: shortId,
                         serviceName: row.service_title,
@@ -836,10 +836,10 @@ const sendBookingNotifications = async (bookingId) => {
                         },
                         booking: bookingData
                     });
-                    logger.info(`[Notifications] Guest email SENT to ${guestEmail}`);
+                    logger.info('[Notifications] Guest email sent.', { bookingId });
                     emailsSent = true;
                 } catch (guestErr) {
-                    logger.error(`[Notifications] Guest email FAILED: ${guestErr.message}`);
+                    logger.error('[Notifications] Guest email failed.', { bookingId, errorType: guestErr.name });
                 }
             } else {
                 logger.error(`[Notifications] sendGuestBookingConfirmation NOT FOUND in module!`);

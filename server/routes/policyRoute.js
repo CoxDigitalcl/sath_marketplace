@@ -10,7 +10,7 @@ const router = express.Router();
 // Given the design, it's inside the dashboard, so let's stick to consistent Auth if possible, 
 // BUT `ProviderLegal` might be viewed by unverified users? 
 // Let's assume Authenticated for now as it's in the Dashboard route group.
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 
 router.get('/', authenticateToken, getPolicies);
 

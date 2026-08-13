@@ -14,10 +14,10 @@ export const recordLatency = (durationMs) => {
 export const recordError = (error, req) => {
     const errorEntry = {
         timestamp: new Date(),
-        message: error.message,
-        path: req?.originalUrl || 'unknown',
+        message: 'Internal server error',
+        path: req?.path || 'unknown',
         method: req?.method || 'UNKNOWN',
-        stack: error.stack ? error.stack.split('\n')[0] : '' // Just first line
+        correlationId: req?.correlationId || 'unavailable'
     };
 
     errorHistory.unshift(errorEntry); // Add to top

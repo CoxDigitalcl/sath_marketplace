@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { createBooking, createGuestBooking, getBookings, handlePaykuWebhook, checkAvailability, updateBookingStatus, checkProviderAccess, getBookingById, getPublicBookingById, verifyPayment } from '../controllers/bookingController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 import { requireBookingCapability } from '../services/bookingCapability.js';
 
 const router = express.Router();

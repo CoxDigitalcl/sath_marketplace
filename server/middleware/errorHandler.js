@@ -3,24 +3,41 @@ import AlertService, { SEVERITY } from '../services/alertService.js';
 import { recordError } from '../services/systemMetricService.js';
 
 const errorHandler = async (err, req, res, next) => {
-    logger.error(`${err.statusCode || 500} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+    const statusCode = Number(err.statusCode || err.status) || 500;
+    const isServerError = statusCode >= 500;
+    const correlationId = req.correlationId || 'unavailable';
+    const safePath = req.path || '/';
+
+    logger.error('API request failed.', {
+        statusCode,
+        method: req.method,
+        path: safePath,
+        correlationId,
+        errorType: err.name || 'Error'
+    });
 
     // Alert on 500s (Server Errors)
-    if (!err.statusCode || err.statusCode === 500) {
+    if (isServerError) {
         // Record for Dashboard
         recordError(err, req);
 
-        await AlertService.notify(err, {
+        await AlertService.notify(new Error('Unhandled API error.'), {
             component: 'API',
-            path: req.originalUrl,
-            method: req.method
+            path: safePath,
+            method: req.method,
+            correlationId
         }, SEVERITY.HIGH);
     }
 
-    res.status(err.statusCode || 500).json({
+    const productionMessage = isServerError
+        ? 'Ocurrió un error interno. Usa el identificador de solicitud si necesitas soporte.'
+        : err.message;
+
+    res.status(statusCode).json({
         status: 'error',
-        message: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        code: isServerError ? 'INTERNAL_SERVER_ERROR' : (err.code || 'REQUEST_ERROR'),
+        message: process.env.NODE_ENV === 'production' ? productionMessage : err.message,
+        correlationId
     });
 };
 

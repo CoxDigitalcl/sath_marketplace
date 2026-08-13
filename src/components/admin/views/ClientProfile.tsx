@@ -7,11 +7,12 @@ import {
     ShieldOff, ShieldCheck, KeyRound, Tag, Trash2, MessageSquare, Loader2, X
 } from 'lucide-react';
 import { api } from '../../../api/client';
+import { AdminStepUpCancelledError, requestAdminStepUp, withAdminStepUp } from '../../../api/adminSecurity';
 import toast from 'react-hot-toast';
 
 // Helper: Authenticated fetch for admin endpoints
 const adminFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
     };
@@ -153,7 +154,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
 
     const getToken = () => {
         try {
-            return JSON.parse(localStorage.getItem('auth-storage') || '{}').state?.token;
+            return JSON.parse(sessionStorage.getItem('auth-storage') || '{}').state?.token;
         } catch { return null; }
     };
 
@@ -192,6 +193,10 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
     const handleAction = async (actionId: string) => {
         const token = getToken();
         const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const getCriticalHeaders = async () => ({
+            ...authHeader,
+            ...withAdminStepUp(await requestAdminStepUp())
+        });
 
         switch (actionId) {
             case 'block': {
@@ -199,7 +204,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
                 if (!window.confirm(`¿Confirmas que deseas ${label} la cuenta de ${client.nombre}?`)) return;
                 setActionLoading('block');
                 try {
-                    const res = await adminFetch(`/api/admin/clients/${client.id}/block`, { method: 'PUT', headers: authHeader });
+                    const headers = await getCriticalHeaders();
+                    const res = await adminFetch(`/api/admin/clients/${client.id}/block`, { method: 'PUT', headers });
                     const data = await res.json();
                     if (data.status === 'success') {
                         setIsBlocked(data.data.is_blocked);
@@ -207,7 +213,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
                     } else {
                         toast.error(data.message || 'Error al actualizar estado.');
                     }
-                } catch {
+                } catch (error) {
+                    if (error instanceof AdminStepUpCancelledError) return;
                     toast.error('Error de conexión al bloquear la cuenta.');
                 } finally {
                     setActionLoading(null);
@@ -216,18 +223,19 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
             }
 
             case 'reset_pass': {
-                if (!window.confirm(`¿Forzar un reset de password para ${client.email}? Se generará un enlace válido por 24 horas.`)) return;
+                if (!window.confirm(`¿Cerrar las sesiones de ${client.email} y exigir recuperación de contraseña?`)) return;
                 setActionLoading('reset_pass');
                 try {
-                    const res = await adminFetch(`/api/admin/clients/${client.id}/force-reset-password`, { method: 'POST', headers: authHeader });
+                    const headers = await getCriticalHeaders();
+                    const res = await adminFetch(`/api/admin/clients/${client.id}/force-reset-password`, { method: 'POST', headers });
                     const data = await res.json();
                     if (data.status === 'success') {
-                        toast.success(`Token generado. Enlace copiado al portapapeles.`, { duration: 5000 });
-                        navigator.clipboard.writeText(data.data.resetLink).catch(() => { });
+                        toast.success(data.message, { duration: 5000 });
                     } else {
-                        toast.error(data.message || 'Error al generar token.');
+                        toast.error(data.message || 'Error al exigir la recuperación.');
                     }
-                } catch {
+                } catch (error) {
+                    if (error instanceof AdminStepUpCancelledError) return;
                     toast.error('Error de conexión.');
                 } finally {
                     setActionLoading(null);
@@ -247,7 +255,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
                 if (!c2) return;
                 setActionLoading('delete_data');
                 try {
-                    const res = await adminFetch(`/api/admin/clients/${client.id}/data`, { method: 'DELETE', headers: authHeader });
+                    const headers = await getCriticalHeaders();
+                    const res = await adminFetch(`/api/admin/clients/${client.id}/data`, { method: 'DELETE', headers });
                     const data = await res.json();
                     if (data.status === 'success') {
                         toast.success(data.message);
@@ -255,7 +264,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ client, onBack }) => {
                     } else {
                         toast.error(data.message || 'Error al eliminar datos.');
                     }
-                } catch {
+                } catch (error) {
+                    if (error instanceof AdminStepUpCancelledError) return;
                     toast.error('Error de conexión.');
                 } finally {
                     setActionLoading(null);

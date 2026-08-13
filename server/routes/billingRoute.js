@@ -1,6 +1,6 @@
 import express from 'express';
 import { getBillingInfo, updateBillingInfo, getInvoices } from '../controllers/billingController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 
 const router = express.Router();
 

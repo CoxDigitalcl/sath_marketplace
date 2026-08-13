@@ -1,6 +1,6 @@
 import express from 'express';
 import { updateProfile, getProfile, getDashboardStats, getFinanceDetails, getProviderKycRequirements } from '../controllers/providerController.js';
-import { authenticateToken, requireVerified } from '../middleware/auth.js';
+import { authenticateToken, requireVerified } from '../middleware/sessionAuth.js';
 import { requireRole } from '../middleware/authorization.js';
 import upload from '../middleware/upload.js';
 import { cleanupRejectedUploads, validateUploadedFileFields, validateUploadedFileSignatures } from '../middleware/fileUploadSecurity.js';

@@ -79,7 +79,7 @@ export const notifyAdmin = async (event, data) => {
             if (res.rows.length > 0) adminEmail = res.rows[0].value;
         } catch (dbErr) {
             // Fallback to .env if table doesn't exist yet
-            logger.warn(`Could not fetch admin_email from DB, using fallback: ${adminEmail}`);
+            logger.warn('Could not fetch admin_email from DB; using configured fallback.');
         }
 
         let subject = '';
@@ -324,7 +324,7 @@ export const sendGuestBookingConfirmation = async ({ bookingId, serviceName, gue
     `;
 
     await sendEmail({ to: guest.email, subject, html });
-    logger.info(`[Guest Email] Booking confirmation sent to ${guest.email} for order #${bookingId}`);
+    logger.info('[Guest Email] Booking confirmation sent.', { bookingId });
 };
 
 export default { sendEmail, notifyAdmin, sendInvoiceEmail, sendCrossContactEmails, sendGuestBookingConfirmation };

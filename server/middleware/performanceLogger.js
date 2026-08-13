@@ -22,7 +22,7 @@ const performanceLogger = (req, res, next) => {
         // 2. Logging & Alerting
         // Threshold: 2000ms (Critical Performance Issue)
         if (duration > 2000) {
-            const warningMsg = `[PERFORMANCE WARNING] Slow Request: ${req.method} ${req.originalUrl} took ${timeInMs}ms`;
+            const warningMsg = `[PERFORMANCE WARNING] Slow Request: ${req.method} ${req.path} took ${timeInMs}ms`;
 
             // Log locally
             logger.warn(warningMsg);
@@ -31,14 +31,15 @@ const performanceLogger = (req, res, next) => {
             AlertService.notify(new Error(warningMsg), {
                 component: 'API_PERFORMANCE',
                 duration: `${timeInMs}ms`,
-                path: req.originalUrl,
+                path: req.path,
                 method: req.method,
-                ip: req.ip
+                ip: req.ip,
+                correlationId: req.correlationId
             }, SEVERITY.WARNING).catch(err => console.error('Failed to send perf alert', err));
         }
         // Threshold: 500ms (Warning)
         else if (duration > 500) {
-            logger.warn(`[SLOW REQUEST] ${req.method} ${req.originalUrl} took ${timeInMs}ms`);
+            logger.warn(`[SLOW REQUEST] ${req.method} ${req.path} took ${timeInMs}ms`);
         }
     });
 

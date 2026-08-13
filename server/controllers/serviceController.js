@@ -67,7 +67,7 @@ export const createPromotion = async (req, res, next) => {
         }
 
         if (!tierId) {
-            logger.warn(`[createPromotion] tierId is missing! Body was: ${JSON.stringify(req.body)}`);
+            logger.warn('[createPromotion] tierId is missing.', { userId, correlationId: req.correlationId });
             return res.status(400).json({ status: 'error', message: 'Debes seleccionar un plan de promoción' });
         }
 

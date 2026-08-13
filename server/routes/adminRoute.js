@@ -44,16 +44,15 @@ import {
     testSimpleFacturaConnection,
     generateProviderMonthlySettlement,
     resolveImageModeration,
-    blockClient,
-    forcePasswordReset,
     applyManualCoupon,
-    deleteClientData,
     getDashboardCharts,
 } from '../controllers/adminController.js';
 
 import { getProviderDetails, getProviderServices, updateDocumentStatus, togglePayouts } from '../controllers/providerController.js';
 import { getAdminServices, getAdminPromotions, toggleStaffPick, moderateService, deletePromotion, updatePromotionStatus } from '../controllers/serviceController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { blockClient, forcePasswordReset, deleteClientData, impersonateUser } from '../controllers/adminSecurityController.js';
+import { requireAdminStepUp } from '../middleware/adminStepUp.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 
 const router = express.Router();
 
@@ -139,10 +138,10 @@ router.put('/providers/:id/payouts', togglePayouts);
 router.post('/sync-provider-verification', syncProviderVerification);
 router.get('/clients', getClients);
 router.get('/clients/:id/profile', getClientProfile);
-router.put('/clients/:id/block', blockClient);
-router.post('/clients/:id/force-reset-password', forcePasswordReset);
+router.put('/clients/:id/block', requireAdminStepUp, blockClient);
+router.post('/clients/:id/force-reset-password', requireAdminStepUp, forcePasswordReset);
 router.post('/clients/:id/apply-coupon', applyManualCoupon);
-router.delete('/clients/:id/data', deleteClientData);
+router.delete('/clients/:id/data', requireAdminStepUp, deleteClientData);
 
 // Services Management (Admin)
 router.get('/services', getAdminServices);
@@ -158,76 +157,7 @@ router.post('/promotion-tiers', createPromotionTier);
 router.put('/promotion-tiers/:id', updatePromotionTier);
 router.delete('/promotion-tiers/:id', deletePromotionTier);
 
-// ===== IMPERSONATE USER (Admin Only) =====
-// POST /api/admin/impersonate/:userId
-// Generates a JWT for the target user, allowing admin to act as them
-router.post('/impersonate/:userId', async (req, res) => {
-    try {
-        const { pool } = await import('../config/db.js');
-        const jwt = await import('jsonwebtoken');
-
-        const adminId = req.user.id;
-        const targetUserId = req.params.userId;
-
-        // 1. Fetch target user
-        const userRes = await pool.query(
-            'SELECT id, email, role FROM users WHERE id = $1',
-            [targetUserId]
-        );
-
-        if (userRes.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Usuario no encontrado'
-            });
-        }
-
-        const targetUser = userRes.rows[0];
-
-        // 2. Security: Prevent impersonating other admins
-        if (targetUser.role === 'admin') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'No se puede impersonar a otro administrador'
-            });
-        }
-
-        // 3. Generate impersonation token (shorter expiry for security)
-        const JWT_SECRET = process.env.JWT_SECRET; // Validated at startup by auth.js
-        const token = jwt.default.sign(
-            {
-                id: targetUser.id,
-                role: targetUser.role,
-                email: targetUser.email,
-                impersonatedBy: adminId // Track who is impersonating
-            },
-            JWT_SECRET,
-            { expiresIn: '2h' } // Shorter expiry for impersonation sessions
-        );
-
-        // 4. Log the impersonation action (audit trail)
-        console.log(`[AUDIT] Admin ${adminId} impersonated user ${targetUserId} (${targetUser.email}) at ${new Date().toISOString()}`);
-
-        // 5. Return token and user info
-        res.json({
-            status: 'success',
-            message: `Ahora estás actuando como ${targetUser.email}`,
-            token,
-            user: {
-                id: targetUser.id,
-                email: targetUser.email,
-                role: targetUser.role
-            }
-        });
-
-    } catch (err) {
-        console.error('Impersonate error:', err);
-        res.status(500).json({
-            status: 'error',
-            message: err.message
-        });
-    }
-});
-
+// Critical support access: short-lived, step-up protected and audited in the controller.
+router.post('/impersonate/:userId', requireAdminStepUp, impersonateUser);
 
 export default router;

@@ -13,7 +13,7 @@ import toast from 'react-hot-toast';
 
 // Helper: Authenticated fetch for admin endpoints
 const adminFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
     };
@@ -91,7 +91,7 @@ const DocumentReviewModal: React.FC<{ document: any; onClose: () => void; onDeci
 
         if (!fileUrl.startsWith('/api/files/private/')) return;
 
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         fetch(fileUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
             .then(response => {
                 if (!response.ok) throw new Error('No se pudo cargar el archivo');

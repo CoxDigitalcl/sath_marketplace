@@ -52,9 +52,9 @@ const AdminDashboard: React.FC = () => {
 
     // Protect Route
     useEffect(() => {
-        // Double check against localStorage in case zustand hasn't rehydrated yet
-        const storedAuth = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-        const activeToken = token || storedAuth.state?.token || localStorage.getItem('auth_token');
+        // Double check the session state in case Zustand has not rehydrated yet
+        const storedAuth = JSON.parse(sessionStorage.getItem('auth-storage') || '{}');
+        const activeToken = token || storedAuth.state?.token || sessionStorage.getItem('auth_token');
         const activeUser = user || storedAuth.state?.user;
 
         if (!activeToken) {

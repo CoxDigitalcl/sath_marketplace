@@ -54,6 +54,10 @@ export const changePasswordSchema = z.object({
         .regex(/[0-9]/, 'Debe incluir al menos un número'),
 });
 
+export const adminStepUpSchema = z.object({
+    password: z.string().min(1, 'La contraseña es requerida').max(256, 'La contraseña es demasiado larga'),
+});
+
 // Helper validation function
 export const validate = (schema) => (req, res, next) => {
     try {

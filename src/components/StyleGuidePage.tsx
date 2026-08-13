@@ -28,8 +28,8 @@ const StyleGuidePage: React.FC = () => {
   const { user, token } = useAuthStore();
 
   useEffect(() => {
-    const storedAuth = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-    const activeToken = token || storedAuth.state?.token || localStorage.getItem('auth_token');
+    const storedAuth = JSON.parse(sessionStorage.getItem('auth-storage') || '{}');
+    const activeToken = token || storedAuth.state?.token || sessionStorage.getItem('auth_token');
     const activeUser = user || storedAuth.state?.user;
 
     if (!activeToken) {

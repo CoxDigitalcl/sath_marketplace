@@ -15,9 +15,8 @@ export const api = axios.create({
 // Request Interceptor: Attach Token
 api.interceptors.request.use(
     (config) => {
-        // Get token from LocalStorage (or AuthStore)
-        // We access localStorage directly here as a failsafe
-        const token = localStorage.getItem('auth_token');
+        // Access tokens are scoped to the active tab during the progressive session migration.
+        const token = sessionStorage.getItem('auth_token');
 
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;

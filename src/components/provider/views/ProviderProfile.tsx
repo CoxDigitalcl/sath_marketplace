@@ -199,7 +199,7 @@ const ProviderProfile: React.FC = () => {
     // On mount: get userId from auth storage
     React.useEffect(() => {
         try {
-            const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+            const authData = JSON.parse(sessionStorage.getItem('auth-storage') || '{}');
             const id = authData?.state?.user?.id;
             if (id) setUserId(id);
         } catch (e) {
@@ -372,7 +372,7 @@ const ProviderProfile: React.FC = () => {
     useEffect(() => {
         const fetchKycReqs = async () => {
             try {
-                const token = localStorage.getItem('token');
+                const token = sessionStorage.getItem('token');
                 const res = await fetch('/api/provider/kyc-requirements', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });

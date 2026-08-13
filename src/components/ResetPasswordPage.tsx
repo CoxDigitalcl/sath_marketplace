@@ -5,8 +5,8 @@ import { KeyRound, CheckCircle2, ShieldCheck, XCircle, Eye, EyeOff, Loader2 } fr
 import toast from 'react-hot-toast';
 
 /**
- * ResetPasswordPage — Handles link-based password reset.
- * Reached via /reset-password?token=<jwt_reset_session_token>
+ * ResetPasswordPage — consumes an opaque, server-stored, one-use reset token.
+ * Reached via /reset-password?token=<opaque_reset_session_token>
  * This page is used when the admin forces a password reset and the user clicks the emailed link.
  */
 

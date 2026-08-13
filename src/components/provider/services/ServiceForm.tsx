@@ -189,7 +189,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             const formDataUpload = new FormData();
             formDataUpload.append('cover', file);
 
-            const token = localStorage.getItem('auth_token');
+            const token = sessionStorage.getItem('auth_token');
             if (!token) {
                 toast.error('No se encontró un token de sesión. Por favor inicia sesión nuevamente.');
                 setIsUploadingCover(false);
@@ -239,7 +239,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             formDataUpload.append('video', file);
 
             // NOTE: authStore uses 'auth_token' key, not 'token'
-            const token = localStorage.getItem('auth_token');
+            const token = sessionStorage.getItem('auth_token');
             if (!token) {
                 toast.error("No se encontró un token de sesión. Por favor inicia sesión nuevamente.");
                 setIsUploadingVideo(false);
@@ -305,7 +305,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     }, [service]);
 
     useEffect(() => {
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         if (!token) return;
 
         fetch('/api/provider/profile', {
@@ -384,7 +384,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             toast.success('Vehículo agregado');
             return;
         }
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         const res = await fetch(`/api/freight/services/${service.id}/vehicles`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -408,7 +408,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             toast.success('Vehículo actualizado');
             return;
         }
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         const res = await fetch(`/api/freight/services/${service?.id}/vehicles/${vehicleId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -429,7 +429,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             toast.success('Vehículo eliminado');
             return;
         }
-        const token = localStorage.getItem('auth_token');
+        const token = sessionStorage.getItem('auth_token');
         const res = await fetch(`/api/freight/services/${service?.id}/vehicles/${vehicleId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` },

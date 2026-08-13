@@ -3,7 +3,7 @@ import {
     createService, getServices, getFeaturedServices, getServiceById, getMyServices, updateService,
     createPromotion, getActivePromotionTiers
 } from '../controllers/serviceController.js';
-import { authenticateToken, requireVerified } from '../middleware/auth.js';
+import { authenticateToken, requireVerified } from '../middleware/sessionAuth.js';
 import { requireRole } from '../middleware/authorization.js';
 import { getServiceQuote } from '../controllers/publicServiceQuoteController.js';
 import videoUpload from '../middleware/videoUpload.js';

@@ -100,6 +100,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ navigateTo }) => {
         else navigateTo('client-dashboard');
       }
     } catch (error: any) {
+      if (error.response?.data?.code === 'PASSWORD_RESET_REQUIRED') {
+        toast.error(error.response.data.message);
+        navigateTo('forgot-password');
+        return;
+      }
       const msg = error.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.';
       toast.error(msg);
     } finally {

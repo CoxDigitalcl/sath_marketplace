@@ -7,8 +7,9 @@ import fs from 'fs';
 // Note: In ESM, we must use extensions like .js
 import logger from './config/logger.js';
 import errorHandler from './middleware/errorHandler.js';
-import { authenticateToken } from './middleware/auth.js';
+import { authenticateToken } from './middleware/sessionAuth.js';
 import securitySetup from './middleware/security.js';
+import createRequestContextMiddleware from './middleware/requestContext.js';
 import createHttpsRedirectMiddleware from './middleware/httpsRedirect.js';
 import performanceLogger from './middleware/performanceLogger.js';
 import db from './config/db.js';
@@ -39,6 +40,7 @@ const PORT = process.env.PORT || 3001;
 
 // Trust the reverse proxy (cPanel/Nginx) for express-rate-limit and IP detection
 app.set('trust proxy', 1);
+app.use(createRequestContextMiddleware());
 
 // Production must never serve credentials, bearer tokens or HTML over plaintext HTTP.
 app.use(createHttpsRedirectMiddleware());
@@ -57,9 +59,7 @@ app.use(performanceLogger);
 // 3. Request Logging (Console Only)
 app.use((req, res, next) => {
     if (logger && logger.info) {
-        logger.info(`${req.method} ${req.url} - ${req.ip}`);
-    } else {
-        console.log(`${req.method} ${req.url}`);
+        logger.info('HTTP request', { method: req.method, path: req.path, correlationId: req.correlationId });
     }
     next();
 });

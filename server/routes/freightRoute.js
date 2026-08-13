@@ -1,6 +1,6 @@
 import express from 'express';
 import { getVehicles, addVehicle, updateVehicle, deleteVehicle, calculateLogistics } from '../controllers/freightController.js';
-import { authenticateToken, requireVerified } from '../middleware/auth.js';
+import { authenticateToken, requireVerified } from '../middleware/sessionAuth.js';
 import { requireRole } from '../middleware/authorization.js';
 
 const router = express.Router();

@@ -6,7 +6,7 @@ import {
     getClaimById,
     addClaimMessage
 } from '../controllers/claimsController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 import upload from '../middleware/upload.js';
 import { cleanupRejectedUploads, validateUploadedFileSignatures } from '../middleware/fileUploadSecurity.js';
 import { privateAttachmentUploadLimiter } from '../middleware/uploadRateLimits.js';

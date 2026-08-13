@@ -5,6 +5,8 @@ import StatusBadge from './StatusBadge';
 import ToggleSwitch from './ToggleSwitch';
 import { MoreVertical, Copy, Eye, LogIn, Send, Star } from 'lucide-react';
 import { api } from '../../../api/client';
+import { AdminStepUpCancelledError, requestAdminStepUp, withAdminStepUp } from '../../../api/adminSecurity';
+import { useAuthStore } from '../../../stores/authStore';
 import toast from 'react-hot-toast';
 
 interface ProviderTableProps {
@@ -140,19 +142,24 @@ const ProviderTable: React.FC<ProviderTableProps> = ({ providers, currentPage, t
         }
 
         try {
-            const res = await api.post(`/admin/impersonate/${provider.id}`);
+            const stepUpToken = await requestAdminStepUp();
+            const res = await api.post(
+                `/admin/impersonate/${provider.id}`,
+                {},
+                { headers: withAdminStepUp(stepUpToken) }
+            );
             if (res.data.status === 'success') {
-                localStorage.setItem('auth_token', res.data.token);
-                localStorage.setItem('user', JSON.stringify(res.data.user));
+                useAuthStore.getState().beginImpersonation(res.data.token, res.data.user);
 
                 const targetUrl = res.data.user.role === 'provider'
-                    ? '/provider'
+                    ? '/provider/dashboard'
                     : '/';
 
-                toast.success(`Ahora estas actuando como ${res.data.user.email}. La pagina se recargara.`);
+                toast.success('Sesión temporal de soporte iniciada.');
                 window.location.href = targetUrl;
             }
         } catch (err: any) {
+            if (err instanceof AdminStepUpCancelledError) return;
             toast.error(err.response?.data?.message || 'Error al impersonar usuario');
         }
     };

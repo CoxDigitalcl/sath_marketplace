@@ -5,7 +5,7 @@ import { Download, AlertCircle, Banknote, Calendar, BarChart2, AlertTriangle, Re
 
 // Helper: Authenticated fetch for admin endpoints
 const adminFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
     };

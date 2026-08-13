@@ -1,7 +1,8 @@
 import express from 'express';
-import { register, login, requestPasswordReset, verifyResetCode, resetPassword, changePassword } from '../controllers/authController.js';
-import { validate, registerSchema, loginSchema, forgotPasswordSchema, verifyResetCodeSchema, resetPasswordSchema, changePasswordSchema } from '../utils/validation.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { register, login } from '../controllers/identityController.js';
+import { requestPasswordReset, verifyResetCode, resetPassword, changePassword, logout, createAdminStepUp } from '../controllers/passwordSecurityController.js';
+import { validate, registerSchema, loginSchema, forgotPasswordSchema, verifyResetCodeSchema, resetPasswordSchema, changePasswordSchema, adminStepUpSchema } from '../utils/validation.js';
+import { authenticateToken } from '../middleware/sessionAuth.js';
 import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
@@ -41,6 +42,12 @@ const verifyCodeLimiter = rateLimit({
     message: { status: 'error', message: 'Demasiados intentos de verificación. Por favor, solicita un nuevo código.' }
 });
 
+const adminStepUpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: { status: 'error', message: 'Demasiados intentos de confirmación. Intenta nuevamente en 15 minutos.' }
+});
+
 // POST /api/auth/forgot-password — Request a reset code
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), requestPasswordReset);
 
@@ -52,5 +59,11 @@ router.post('/reset-password', validate(resetPasswordSchema), resetPassword);
 
 // POST /api/auth/change-password — Change password (authenticated user)
 router.post('/change-password', authenticateToken, validate(changePasswordSchema), changePassword);
+
+// Revokes every active access token for the authenticated account.
+router.post('/logout', authenticateToken, logout);
+
+// Returns a five-minute credential for critical admin actions.
+router.post('/step-up', authenticateToken, adminStepUpLimiter, validate(adminStepUpSchema), createAdminStepUp);
 
 export default router;

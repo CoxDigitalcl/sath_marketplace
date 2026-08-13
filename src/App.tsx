@@ -5,6 +5,7 @@ import AppRoutes from './routes/AppRoutes';
 import ErrorLogConsole from './components/ErrorLogConsole';
 import VerificationModal from './components/common/VerificationModal';
 import SessionExpiredModal from './components/common/SessionExpiredModal';
+import ImpersonationBanner from './components/common/ImpersonationBanner';
 import { Toaster } from 'react-hot-toast';
 
 // Fallback component for Error Boundary
@@ -33,6 +34,7 @@ const App: React.FC = () => {
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.href = '/'}>
       <BrowserRouter>
         <Toaster position="top-right" />
+        <ImpersonationBanner />
         <AppRoutes />
         <VerificationModal />
         <SessionExpiredModal />
