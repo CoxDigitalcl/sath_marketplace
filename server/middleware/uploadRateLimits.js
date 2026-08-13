@@ -33,3 +33,10 @@ export const providerProfileUploadLimiter = createUploadLimiter({
     limit: 10,
     message: 'Demasiadas actualizaciones con archivos. Intenta nuevamente en unos minutos.'
 });
+
+// Shared by claims and support so switching endpoints cannot bypass the quota.
+export const privateAttachmentUploadLimiter = createUploadLimiter({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    message: 'Demasiados archivos adjuntos. Intenta nuevamente en unos minutos.'
+});

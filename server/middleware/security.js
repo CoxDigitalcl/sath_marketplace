@@ -1,7 +1,22 @@
 import helmet from 'helmet';
 import cors from 'cors';
+import { getCorsOrigins, normalizeOrigin } from '../config/application.js';
 
-const securitySetup = (app) => {
+export const createCorsOptions = (environment = process.env) => {
+    const allowedOrigins = new Set(getCorsOrigins(environment));
+
+    return {
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            return callback(null, allowedOrigins.has(normalizeOrigin(origin)));
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    };
+};
+
+const securitySetup = (app, environment = process.env) => {
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -22,14 +37,7 @@ const securitySetup = (app) => {
         referrerPolicy: { policy: "strict-origin-when-cross-origin" }
     }));
 
-    const corsOptions = {
-        origin: process.env.CORS_ORIGIN || 'https://serviciosatuhogar.cl',
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-    };
-
-    app.use(cors(corsOptions));
+    app.use(cors(createCorsOptions(environment)));
 };
 
 export default securitySetup;

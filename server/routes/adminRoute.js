@@ -26,7 +26,6 @@ import {
     getVerificationRequirements,
     upsertVerificationRequirement,
     deleteVerificationRequirement,
-    runKycMigration,
     getRejectionReasons,
     upsertRejectionReason,
     deleteRejectionReason,
@@ -37,9 +36,6 @@ import {
     updateContentTemplate,
     getAdvancedStats,
     downloadReport,
-    cleanOrphanServices,
-    inspectServiceConsistency,
-    cleanupTestData,
     syncProviderVerification,
     getPromotionTiers,
     createPromotionTier,
@@ -47,23 +43,16 @@ import {
     deletePromotionTier,
     testSimpleFacturaConnection,
     generateProviderMonthlySettlement,
-    runInvoiceMigration,
-    runModerationMigration,
     resolveImageModeration,
-    migrateAddIsBlocked,
     blockClient,
     forcePasswordReset,
     applyManualCoupon,
     deleteClientData,
-    updateCategoriesCommissionMigration,
-    runGuestCheckoutMigration,
     getDashboardCharts,
-    setupPricingTypeMigration
 } from '../controllers/adminController.js';
 
 import { getProviderDetails, getProviderServices, updateDocumentStatus, togglePayouts } from '../controllers/providerController.js';
 import { getAdminServices, getAdminPromotions, toggleStaffPick, moderateService, deletePromotion, updatePromotionStatus } from '../controllers/serviceController.js';
-import { migrateFreightSchema } from '../controllers/freightController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -76,53 +65,9 @@ const requireAdmin = (req, res, next) => {
     }
 };
 
-const requireMaintenanceMode = (req, res, next) => {
-    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_MAINTENANCE_ROUTES === 'true') {
-        return next();
-    }
-    return res.status(404).json({ status: 'error', message: 'Not found' });
-};
-
 // Protect all admin routes defined below
 router.use(authenticateToken);
 router.use(requireAdmin);
-
-// ===== MIGRATION: Invoice Schema =====
-router.post('/migrations/run-invoice-migration', requireMaintenanceMode, runInvoiceMigration);
-
-// ===== MIGRATION: Moderation Schema =====
-router.get('/migrations/run-moderation-migration', requireMaintenanceMode, runModerationMigration);
-
-// ===== MIGRATION: Guest Checkout Schema =====
-router.get('/migrations/run-guest-checkout', requireMaintenanceMode, runGuestCheckoutMigration);
-// ===== MIGRATION: Pricing Type y Multi-hours =====
-router.get('/db-migrate/setup-pricing-type', requireMaintenanceMode, setupPricingTypeMigration);
-
-// ===== MIGRATION: Quick Actions Schema =====
-router.get('/db-migrate/add-is-blocked', requireMaintenanceMode, migrateAddIsBlocked);
-
-// ===== MIGRATION: Commission Types in Categories =====
-router.get('/db-migrate/update-categories-commission', requireMaintenanceMode, updateCategoriesCommissionMigration);
-
-// ===== MIGRATION: Freight/Moving Service Schema =====
-router.get('/db-migrate/freight-schema', requireMaintenanceMode, migrateFreightSchema);
-
-// ===== MIGRATION: Add cover_image_url to services =====
-router.get('/db-migrate/add-cover-image', requireMaintenanceMode, async (req, res) => {
-    try {
-        const { pool } = await import('../config/db.js');
-        await pool.query(`
-            ALTER TABLE services ADD COLUMN IF NOT EXISTS cover_image_url TEXT DEFAULT NULL
-        `);
-        await pool.query(`
-            ALTER TABLE services ADD COLUMN IF NOT EXISTS gallery_media JSONB DEFAULT '[]'::jsonb
-        `);
-        res.json({ status: 'success', message: 'Columns cover_image_url and gallery_media added to services table.' });
-    } catch (err) {
-        console.error('Migration error:', err);
-        res.status(500).json({ status: 'error', message: err.message });
-    }
-});
 
 // Transactions
 router.get('/transactions', getTransactions);
@@ -168,9 +113,6 @@ router.get('/rejection-reasons', getRejectionReasons);
 router.post('/rejection-reasons', upsertRejectionReason);
 router.delete('/rejection-reasons/:id', deleteRejectionReason);
 
-// KYC Migration
-router.get('/db-migrate/kyc-requirements', requireMaintenanceMode, runKycMigration);
-
 // Attributes
 router.get('/attributes', getServiceAttributes);
 router.post('/attributes', upsertServiceAttribute);
@@ -183,11 +125,6 @@ router.put('/templates/:id', updateContentTemplate);
 // Analytics & Reports
 router.get('/analytics', getAdvancedStats);
 router.get('/reports/:type', downloadReport);
-
-// Debug / Cleanup
-router.delete('/debug/clean-orphans', requireMaintenanceMode, cleanOrphanServices);
-router.get('/debug/inspect-consistency', requireMaintenanceMode, inspectServiceConsistency);
-router.delete('/debug/cleanup-test-data', requireMaintenanceMode, cleanupTestData);
 
 router.get('/system-status', getSystemStats);
 router.get('/stats', getAdminStats);
@@ -291,48 +228,6 @@ router.post('/impersonate/:userId', async (req, res) => {
         });
     }
 });
-
-
-// ===== MIGRATION: Fix Favorites Table Permissions =====
-// Call: GET /api/admin/fix-favorites-permissions (NO AUTH REQUIRED)
-// This recreates the favorites table to ensure the current DB user is the owner
-router.get('/fix-favorites-permissions', async (req, res) => {
-    try {
-        const { pool } = await import('../config/db.js');
-
-        console.log('Iniciando recreación de tabla favorites...');
-
-        // 1. Drop existing table
-        await pool.query('DROP TABLE IF EXISTS favorites CASCADE');
-        console.log('Tabla favorites eliminada (si existía).');
-
-        // 2. Create table with UUIDs and constraints
-        await pool.query(`
-            CREATE TABLE favorites (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, service_id)
-            )
-        `);
-        console.log('Tabla favorites recreada exitosamente.');
-
-        res.json({
-            status: 'success',
-            message: 'Tabla favorites recreada con permisos correctos. Ya puedes usar favoritos.'
-        });
-
-    } catch (err) {
-        console.error('Fix favorites error:', err);
-        res.status(500).json({
-            status: 'error',
-            message: err.message,
-            hint: 'Asegúrate de que el usuario de la DB tenga permisos para crear tablas.'
-        });
-    }
-});
-
 
 
 export default router;

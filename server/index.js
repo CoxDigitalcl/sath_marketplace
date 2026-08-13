@@ -3,14 +3,13 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import helmet from 'helmet';
-import cors from 'cors';
 
 // Note: In ESM, we must use extensions like .js
 import logger from './config/logger.js';
 import errorHandler from './middleware/errorHandler.js';
 import { authenticateToken } from './middleware/auth.js';
 import securitySetup from './middleware/security.js';
+import createHttpsRedirectMiddleware from './middleware/httpsRedirect.js';
 import performanceLogger from './middleware/performanceLogger.js';
 import db from './config/db.js';
 import authRoutes from './routes/authRoute.js';
@@ -29,7 +28,6 @@ import publicRoutes from './routes/publicRoute.js';
 import freightRoutes from './routes/freightRoute.js';
 import notificationRoutes from './routes/notificationRoute.js';
 import { getPrivateFile } from './controllers/privateFileController.js';
-import axios from 'axios'; // For direct SimpleFactura API call
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,18 +36,11 @@ const app = express();
 // cPanel provides the PORT, but strictly default to 3001 if missing
 const PORT = process.env.PORT || 3001;
 
-const requireMaintenanceRoute = (req, res, next) => {
-    if (!req.user || req.user.role !== 'admin') {
-        return res.status(403).json({ status: 'error', message: 'Admin access required' });
-    }
-    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_MAINTENANCE_ROUTES === 'true') {
-        return next();
-    }
-    return res.status(404).json({ status: 'error', message: 'Not found' });
-};
-
 // Trust the reverse proxy (cPanel/Nginx) for express-rate-limit and IP detection
 app.set('trust proxy', 1);
+
+// Production must never serve credentials, bearer tokens or HTML over plaintext HTTP.
+app.use(createHttpsRedirectMiddleware());
 
 // Force Restart Check
 // 1. Basic Middleware
@@ -115,210 +106,6 @@ app.get('/api/health', async (req, res) => {
         healthData.status = 'degraded';
         healthData.db_connection = 'disconnected';
         res.status(503).json(healthData);
-    }
-});
-
-app.get('/api/test-db', authenticateToken, requireMaintenanceRoute, async (req, res, next) => {
-    try {
-        const start = Date.now();
-        const result = await db.query('SELECT NOW() as current_time');
-        const duration = Date.now() - start;
-
-        res.json({
-            status: 'success',
-            message: 'Database Connection Established',
-            latency_ms: duration,
-            server_time: result.rows[0].current_time
-        });
-    } catch (err) {
-        next(err);
-    }
-});
-
-// SCHEMA SETUP ROUTE (Admin-only, behind JWT auth)
-app.get('/api/setup-schema', authenticateToken, requireMaintenanceRoute, async (req, res) => {
-    try {
-        // 1. Run core schema
-        const schemaPath = path.join(__dirname, 'scripts', 'schema.sql');
-        if (!fs.existsSync(schemaPath)) return res.status(404).json({ error: 'Schema file missing' });
-
-        const sql = fs.readFileSync(schemaPath, 'utf8');
-        await db.query(sql);
-
-        // 2. Create and Populate Categories
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS service_categories (
-                id VARCHAR(100) PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                commission_percentage INTEGER NOT NULL DEFAULT 10,
-                parent_id VARCHAR(100) REFERENCES service_categories(id) ON DELETE CASCADE,
-                is_active BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                commission_type VARCHAR(20) DEFAULT 'PERCENTAGE',
-                fixed_commission INTEGER DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS platform_settings (
-                key VARCHAR(255) PRIMARY KEY,
-                value JSONB NOT NULL,
-                group_name VARCHAR(100) NOT NULL,
-                description TEXT,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-
-        const initialCategories = [
-            {
-                id: 'hogar',
-                name: 'Hogar y Mantención',
-                commission: 15,
-                subcategories: [
-                    "Limpieza profunda del hogar", "Limpieza de patios y bodegas", "Limpieza exterior ventanas", "Sello de cocinas y baños",
-                    "Limpieza campana/encimera/horno", "Limpieza de canaletas", "Mantención equipos A/C", "Mantención estufas a pellet",
-                    "Mantención calefont/calderas", "Gasfitería", "Electricidad", "Pintura", "Cerrajería"
-                ]
-            },
-            {
-                id: 'clases',
-                name: 'Clases y Tutorías',
-                commission: 12,
-                subcategories: [
-                    "Matemáticas", "Inglés", "Lenguaje", "Química", "Física", "Alemán", "Piano", "Violín", "Guitarra",
-                    "Entrenamiento Fitness", "Defensa personal"
-                ]
-            },
-            {
-                id: 'salud',
-                name: 'Salud y Bienestar',
-                commission: 12,
-                subcategories: [
-                    "Psicólogo", "Médico general", "Peluquería", "Enfermería", "Nutricionista", "Kinesiólogo", "Podología", "Manicure"
-                ]
-            },
-            {
-                id: 'eventos',
-                name: 'Eventos y Entretenimiento',
-                commission: 10,
-                subcategories: [
-                    "Niñera por hora", "Decoración cumpleaños", "Payasos", "Mago", "Animación", "Juegos inflables", "Banquetera"
-                ]
-            },
-            {
-                id: 'automoviles',
-                name: 'Automóviles',
-                commission: 15,
-                subcategories: [
-                    "Mecánica a domicilio", "Vulcanización", "Grúa", "Reemplazo baterías", "Lavado de autos", "Grabado de patentes", "Pulido de focos"
-                ]
-            },
-            {
-                id: 'fletes',
-                name: 'Fletes y Mudanzas',
-                commission: 15,
-                subcategories: [
-                    "Fletes menores", "Mudanzas de casa", "Retiro de escombros", "Transporte de carga"
-                ]
-            },
-            {
-                id: 'colegio',
-                name: 'Colegio',
-                commission: 10,
-                subcategories: [
-                    "Regalos escolares", "Charlas educativas", "Transporte escolar"
-                ]
-            }
-        ];
-
-        for (const cat of initialCategories) {
-            await db.query(`
-                INSERT INTO service_categories (id, name, commission_percentage, parent_id)
-                VALUES ($1, $2, $3, NULL)
-                ON CONFLICT (id) DO UPDATE 
-                SET commission_percentage = EXCLUDED.commission_percentage, name = EXCLUDED.name;
-            `, [cat.id, cat.name, cat.commission]);
-
-            for (const sub of cat.subcategories) {
-                const subId = sub.toLowerCase().replace(/ /g, '-').replace(/[^a-z0-9-]/g, '');
-                await db.query(`
-                    INSERT INTO service_categories (id, name, commission_percentage, parent_id)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (id) DO NOTHING;
-                `, [subId, sub, cat.commission, cat.id]);
-            }
-        }
-
-        // 3. Create or expand verification_requirements and rejection_reasons tables and seed
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS verification_requirements (
-                id VARCHAR(100) PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                description TEXT,
-                file_type VARCHAR(50) DEFAULT 'document',
-                accepted_formats TEXT DEFAULT '.pdf,.jpg,.jpeg,.png',
-                max_file_size_mb INTEGER DEFAULT 10,
-                expiration_required BOOLEAN DEFAULT FALSE,
-                required_for_role VARCHAR(50) DEFAULT 'provider',
-                is_mandatory BOOLEAN DEFAULT TRUE,
-                is_active BOOLEAN DEFAULT TRUE,
-                sort_order INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS rejection_reasons (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                reason TEXT NOT NULL,
-                is_active BOOLEAN DEFAULT TRUE,
-                sort_order INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-
-        const seedDocs = [
-            { id: 'kyc_id_front', name: 'Cédula de Identidad (Frente)', desc: 'Foto clara del anverso de tu cédula de identidad vigente.', fileType: 'image', formats: '.jpg,.jpeg,.png', order: 1 },
-            { id: 'kyc_id_back', name: 'Cédula de Identidad (Dorso)', desc: 'Foto clara del reverso de tu cédula de identidad vigente.', fileType: 'image', formats: '.jpg,.jpeg,.png', order: 2 },
-            { id: 'kyc_sii', name: 'Carpeta Tributaria (SII)', desc: 'Documento de Iniciación de Actividades o Carpeta Tributaria emitido por el SII.', fileType: 'document', formats: '.pdf,.jpg,.jpeg,.png', order: 3 },
-            { id: 'kyc_address', name: 'Comprobante de Domicilio', desc: 'Cuenta de servicios básicos o certificado de domicilio con antigüedad máxima de 3 meses.', fileType: 'document', formats: '.pdf,.jpg,.jpeg,.png', order: 4 },
-            { id: 'kyc_criminal_record', name: 'Certificado de Antecedentes', desc: 'Certificado de antecedentes penales emitido por el Registro Civil con antigüedad máxima de 30 días.', fileType: 'document', formats: '.pdf', order: 5, expiration: true }
-        ];
-
-        for (const doc of seedDocs) {
-            await db.query(`
-                INSERT INTO verification_requirements (id, name, description, file_type, accepted_formats, sort_order, expiration_required, required_for_role, is_mandatory, is_active)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 'provider', TRUE, TRUE)
-                ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    description = EXCLUDED.description,
-                    file_type = EXCLUDED.file_type,
-                    accepted_formats = EXCLUDED.accepted_formats,
-                    sort_order = EXCLUDED.sort_order,
-                    expiration_required = EXCLUDED.expiration_required;
-            `, [doc.id, doc.name, doc.desc, doc.fileType, doc.formats, doc.order, doc.expiration || false]);
-        }
-
-        const seedReasons = [
-            'Documento borroso o ilegible',
-            'Documento vencido',
-            'Nombre no coincide con el perfil',
-            'Archivo corrupto o formato no válido',
-            'Falta reverso de la cédula',
-            'Certificado con antigüedad mayor a 30 días'
-        ];
-
-        for (let i = 0; i < seedReasons.length; i++) {
-            await db.query(`
-                INSERT INTO rejection_reasons (reason, sort_order)
-                SELECT $1, $2
-                WHERE NOT EXISTS (SELECT 1 FROM rejection_reasons WHERE reason = $1);
-            `, [seedReasons[i], i + 1]);
-        }
-
-        res.json({ 
-            status: 'success', 
-            message: 'Schema Applied, Categories populated, and KYC verification requirements seeded successfully.' 
-        });
-    } catch (err) {
-        res.status(500).json({ status: 'error', message: err.message });
     }
 });
 

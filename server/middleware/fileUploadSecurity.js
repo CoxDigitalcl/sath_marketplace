@@ -1,6 +1,10 @@
 import fs from 'fs/promises';
+import path from 'node:path';
+import { privateUploadDir } from '../config/uploadPaths.js';
 
 const SIGNATURE_BYTES = 16;
+const RESOLVED_PRIVATE_UPLOAD_DIR = path.resolve(privateUploadDir);
+const isPrivateUpload = (filePath) => path.dirname(path.resolve(filePath)) === RESOLVED_PRIVATE_UPLOAD_DIR;
 
 const startsWith = (buffer, bytes) => (
     buffer.length >= bytes.length && bytes.every((byte, index) => buffer[index] === byte)
@@ -80,6 +84,9 @@ export const validateUploadedFileSignatures = async (req, res, next) => {
                     message: 'El contenido del archivo no coincide con un formato permitido.',
                     code: 'INVALID_FILE_CONTENT'
                 });
+            }
+            if (isPrivateUpload(file.path)) {
+                await fs.chmod(file.path, 0o600);
             }
         }
 

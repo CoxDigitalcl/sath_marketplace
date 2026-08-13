@@ -1,15 +1,6 @@
 import multer from 'multer';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Define storage location: Two levels up from server/middleware -> repositories/backend/uploads
-// This ensures uploads are NOT inside the 'server' folder which gets deleted on deployment.
-const uploadDir = path.join(__dirname, '../../uploads');
-const privateUploadDir = path.join(__dirname, '../../private_uploads');
+import { privateUploadDir, uploadDir } from '../config/uploadPaths.js';
 
 // Ensure directory exists (locally mostly, on server user must create it manually to be safe)
 for (const dir of [uploadDir, privateUploadDir]) {
@@ -23,7 +14,17 @@ for (const dir of [uploadDir, privateUploadDir]) {
     }
 }
 
-const isPrivateField = (fieldname = '') => (
+try {
+    fs.chmodSync(uploadDir, 0o755);
+    fs.chmodSync(privateUploadDir, 0o700);
+} catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Could not harden upload directory permissions: ${error.message}`);
+    }
+    console.error('Could not harden upload directory permissions:', error.message);
+}
+
+export const isPrivateField = (fieldname = '') => (
     fieldname.startsWith('kyc_') ||
     fieldname === 'file' ||
     fieldname === 'attachment'

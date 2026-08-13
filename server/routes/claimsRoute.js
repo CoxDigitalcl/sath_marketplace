@@ -8,6 +8,8 @@ import {
 } from '../controllers/claimsController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
+import { cleanupRejectedUploads, validateUploadedFileSignatures } from '../middleware/fileUploadSecurity.js';
+import { privateAttachmentUploadLimiter } from '../middleware/uploadRateLimits.js';
 
 const router = express.Router();
 
@@ -24,9 +26,9 @@ router.get('/bookings', getBookingsForClaim);
 router.get('/:claimId', getClaimById);
 
 // POST /api/claims - Create new claim
-router.post('/', upload.single('attachment'), createClaim);
+router.post('/', privateAttachmentUploadLimiter, cleanupRejectedUploads, upload.single('attachment'), validateUploadedFileSignatures, createClaim);
 
 // POST /api/claims/:claimId/messages - Add message to claim
-router.post('/:claimId/messages', upload.single('attachment'), addClaimMessage);
+router.post('/:claimId/messages', privateAttachmentUploadLimiter, cleanupRejectedUploads, upload.single('attachment'), validateUploadedFileSignatures, addClaimMessage);
 
 export default router;

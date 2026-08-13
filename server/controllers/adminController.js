@@ -2323,7 +2323,7 @@ export const forcePasswordReset = async (req, res, next) => {
         );
 
         // In production: send email. For now, return the reset link.
-        const resetLink = `${process.env.FRONTEND_URL || 'https://yourdomain.com'}/reset-password?token=${token}`;
+        const resetLink = `${process.env.APP_URL || process.env.FRONTEND_URL || 'https://serviciosatuhogar.cl'}/reset-password?token=${token}`;
 
         res.json({
             status: 'success',

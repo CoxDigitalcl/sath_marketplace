@@ -92,7 +92,7 @@ export const notifyAdmin = async (event, data) => {
                     <h3>Documentos Subidos</h3>
                     <p>El proveedor <strong>${data.providerName}</strong> (${data.email}) ha subido nuevos documentos.</p>
                     <p>Estado: <span style="color:orange">En Revisión</span></p>
-                    <a href="${process.env.FRONTEND_URL}/admin/providers">Ir al Panel de Admin</a>
+                    <a href="${process.env.APP_URL || process.env.FRONTEND_URL || 'https://serviciosatuhogar.cl'}/admin/providers">Ir al Panel de Admin</a>
                 `;
                 break;
             case 'SERVICE_IDEA':
@@ -245,7 +245,7 @@ export const sendGuestBookingConfirmation = async ({ bookingId, serviceName, gue
     const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Por confirmar';
     const scheduledTime = booking.selected_times ? (Array.isArray(booking.selected_times) ? booking.selected_times.join(', ') : booking.selected_times) : '';
     const amount = booking.amount ? `$${Number(booking.amount).toLocaleString('es-CL')}` : '';
-    const appUrl = process.env.App_URL || 'https://serviciosatuhogar.cl';
+    const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://serviciosatuhogar.cl';
 
     const subject = `Tu Reserva Confirmada - #${bookingId} | Serviciosatuhogar`;
     const html = `
