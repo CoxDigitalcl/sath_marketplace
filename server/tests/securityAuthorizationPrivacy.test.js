@@ -65,7 +65,8 @@ test('public service DTO strips tax, commission and promotion internals', () => 
         fixed_commission: 1000,
         payment_status: 'PAID',
         promotion_start_date: '2026-08-10',
-        target_keywords: ['secret-segment']
+        target_keywords: ['secret-segment'],
+        internal_future_secret: 'must-not-leak'
     });
 
     assert.deepEqual(dto, { id: 'service-1', title: 'Servicio visible' });
@@ -122,4 +123,19 @@ test('upload field guard rejects unknown body fields and duplicate files', () =>
         ]
     }, duplicateRes, () => assert.fail('next must not be called'));
     assert.equal(duplicateRes.statusCode, 400);
+
+    const totalGuard = validateUploadedFileFields({
+        allowedFields: ['profile_image', 'banner_image'],
+        maxFilesPerField: 2,
+        maxFiles: 1
+    });
+    const tooManyRes = createResponse();
+    totalGuard({
+        body: {},
+        files: [
+            { fieldname: 'profile_image' },
+            { fieldname: 'banner_image' }
+        ]
+    }, tooManyRes, () => assert.fail('next must not be called'));
+    assert.equal(tooManyRes.statusCode, 400);
 });

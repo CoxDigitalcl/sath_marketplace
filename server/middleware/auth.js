@@ -62,10 +62,26 @@ export const authenticateToken = (req, res, next) => {
     });
 };
 
-export const requireVerified = (req, res, next) => {
-    // If user is not a provider, skip verification check (or adapt logic as needed)
-    if (req.user.role !== 'provider') {
+export const requireVerified = async (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            status: 'error',
+            message: 'Autenticacion requerida.',
+            code: 'AUTH_REQUIRED'
+        });
+    }
+
+    if (req.user.role === 'admin') {
         return next();
+    }
+
+    // Verification is a provider capability; every other role fails closed.
+    if (req.user.role !== 'provider') {
+        return res.status(403).json({
+            status: 'error',
+            message: 'Esta accion requiere una cuenta de proveedor verificada.',
+            code: 'VERIFIED_PROVIDER_REQUIRED'
+        });
     }
 
     // You might need to fetch the latest status from DB if it's not in the token

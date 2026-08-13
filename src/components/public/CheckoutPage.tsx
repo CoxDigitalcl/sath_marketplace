@@ -24,6 +24,14 @@ interface CheckoutPageProps {
     };
 }
 
+interface PublicPricingQuote {
+    baseAmount: number;
+    serviceFee: number;
+    totalAmount: number;
+    units: number;
+    currency: 'CLP';
+}
+
 const parseServiceCommunes = (value: any): string[] => {
     if (Array.isArray(value)) {
         return value.map((commune) => String(commune || '').trim()).filter(Boolean);
@@ -70,6 +78,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
     const [selectedRegionCode, setSelectedRegionCode] = useState(service?.coverage_region_code || '');
     const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
     const selectedCommune = selectedCommunes[0] || '';
+    const [pricingQuote, setPricingQuote] = useState<PublicPricingQuote | null>(null);
+    const [pricingLoading, setPricingLoading] = useState(true);
+    const [pricingError, setPricingError] = useState('');
 
     // Detect if this is a freight booking
     const isFreight = !!freightData;
@@ -79,29 +90,29 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
         !!selectedCommune && serviceCommunes.includes(selectedCommune)
     );
 
-    // Dynamic price calculation. Freight estimates are informational until the backend can quote them.
-    const getBasePrice = () => {
-        if (!service) return 0;
-        if (service.pricing_type === 'per_hour' && booking?.times?.length > 0) {
-            return service.price * booking.times.length;
-        }
-        return service.price;
-    };
-
-    const basePrice = getBasePrice();
+    // The server owns pricing rules; the browser receives customer-facing totals only.
+    const quoteUnits = service?.pricing_type === 'per_hour' ? Math.max(1, booking?.times?.length || 1) : 1;
+    const basePrice = pricingQuote?.baseAmount ?? 0;
+    const commission = pricingQuote?.serviceFee ?? 0;
+    const total = pricingQuote?.totalAmount ?? 0;
+    const commissionLabel = 'Tarifa de Servicio';
     const freightEstimate = isFreight && freightData ? freightData.plan.price_breakdown.total : null;
-    const commissionConfig = {
-        type: String(service?.commission_type || service?.commissionType || 'PERCENTAGE').toUpperCase(),
-        percentage: Number(service?.commission_percentage ?? service?.commission ?? 10),
-        fixed: Number(service?.fixed_commission ?? service?.fixedCommission ?? 0)
-    };
-    const commission = commissionConfig.type === 'FIXED'
-        ? Math.max(0, Math.round(commissionConfig.fixed || 0))
-        : Math.max(0, Math.round(basePrice * ((commissionConfig.percentage || 10) / 100)));
-    const total = basePrice + commission;
-    const commissionLabel = commissionConfig.type === 'FIXED'
-        ? 'Tarifa de Servicio'
-        : `Tarifa de Servicio (${commissionConfig.percentage || 10}%)`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     useEffect(() => {
         if (isAuthenticated && step === 0) {
@@ -113,6 +124,36 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
         setSelectedRegionCode(service?.coverage_region_code || '');
         setSelectedCommunes([]);
     }, [service?.id, service?.coverage_region_code]);
+
+    useEffect(() => {
+        let active = true;
+        setPricingQuote(null);
+        setPricingError('');
+
+        if (!service?.id) {
+            setPricingLoading(false);
+            setPricingError('No se pudo identificar el servicio.');
+            return () => { active = false; };
+        }
+
+        setPricingLoading(true);
+        void api.get(`/services/${service.id}/quote`, { params: { units: quoteUnits } })
+            .then((response) => {
+                const quote = response.data?.pricing as PublicPricingQuote | undefined;
+                if (!quote || !Number.isFinite(quote.totalAmount)) {
+                    throw new Error('Invalid pricing quote');
+                }
+                if (active) setPricingQuote(quote);
+            })
+            .catch(() => {
+                if (active) setPricingError('No pudimos calcular el total. Intenta nuevamente.');
+            })
+            .finally(() => {
+                if (active) setPricingLoading(false);
+            });
+
+        return () => { active = false; };
+    }, [service?.id, quoteUnits]);
 
     const handleGuestSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -128,6 +169,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
     const handleBookingCreation = async () => {
         setProcessing(true);
         try {
+            if (!pricingQuote) {
+                throw new Error(pricingError || 'El total aun no esta disponible.');
+            }
             if (!service?.id || !booking?.date || (!booking?.time && (!booking?.times || booking.times.length === 0))) {
                 throw new Error("Datos de reserva incompletos");
             }
@@ -590,10 +634,10 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                                     <button onClick={() => setStep(1)} className="text-gray-500 hover:text-gray-800 font-medium">Atrás</button>
                                     <button
                                         onClick={handleBookingCreation}
-                                        disabled={processing}
+                                        disabled={processing || pricingLoading || !pricingQuote}
                                         className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg flex items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {processing ? 'Procesando...' : `Pagar $${total.toLocaleString('es-CL')}`}
+                                        {pricingLoading ? 'Calculando...' : processing ? 'Procesando...' : `Pagar $${total.toLocaleString('es-CL')}`}
                                     </button>
                                 </div>
                                 <div className="mt-4 text-center">
@@ -610,6 +654,12 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                             <h3 className="text-lg font-bold text-gray-900 mb-4">
                                 {isFreight ? '🚛 Resumen del Flete' : 'Resumen de Pago'}
                             </h3>
+                            {pricingLoading && (
+                                <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">Calculando total seguro...</div>
+                            )}
+                            {pricingError && (
+                                <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{pricingError}</div>
+                            )}
                             <div className="space-y-3 text-sm border-b border-gray-200 pb-4 mb-4">
                                 {isFreight && freightData ? (
                                     <>

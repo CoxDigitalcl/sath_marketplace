@@ -102,7 +102,8 @@ export const validateUploadedFileFields = ({
     allowedFields = [],
     allowedPrefixes = [],
     allowedBodyFields = [],
-    maxFilesPerField = 1
+    maxFilesPerField = 1,
+    maxFiles = 10
 } = {}) => (req, res, next) => {
     const files = getUploadedFiles(req);
     const counts = new Map();
@@ -116,7 +117,7 @@ export const validateUploadedFileFields = ({
     const allowedBody = new Set(allowedBodyFields);
     const invalidBodyField = Object.keys(req.body || {}).find(field => !allowedBody.has(field));
 
-    if (invalidFileField || invalidBodyField) {
+    if (invalidFileField || invalidBodyField || files.length > maxFiles) {
         return res.status(400).json({
             status: 'error',
             message: 'La solicitud contiene campos de carga no permitidos.',

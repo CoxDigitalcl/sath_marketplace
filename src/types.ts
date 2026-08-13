@@ -325,6 +325,8 @@ export interface Service {
   requires_kyc: boolean;
   status: 'draft' | 'active' | 'paused' | 'flagged';
   videoUrl?: string;
+  moderation_status?: 'pending' | 'approved' | 'rejected';
+  moderation_reason?: string;
   coverImageUrl?: string;
   imageUrls?: string[];
   galleryMedia?: GalleryMediaItem[];

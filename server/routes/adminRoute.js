@@ -62,7 +62,7 @@ import {
 } from '../controllers/adminController.js';
 
 import { getProviderDetails, getProviderServices, updateDocumentStatus, togglePayouts } from '../controllers/providerController.js';
-import { getAdminServices, getAdminPromotions, toggleStaffPick, deletePromotion, updatePromotionStatus } from '../controllers/serviceController.js';
+import { getAdminServices, getAdminPromotions, toggleStaffPick, moderateService, deletePromotion, updatePromotionStatus } from '../controllers/serviceController.js';
 import { migrateFreightSchema } from '../controllers/freightController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -213,6 +213,7 @@ router.get('/promotions', getAdminPromotions);
 router.delete('/promotions/:id', deletePromotion);
 router.put('/promotions/:id', updatePromotionStatus);
 router.patch('/services/:id/staff-pick', toggleStaffPick);
+router.patch('/services/:id/moderation', moderateService);
 
 // Promotion Tiers Management (Admin)
 router.get('/promotion-tiers', getPromotionTiers);

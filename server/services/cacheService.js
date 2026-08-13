@@ -3,7 +3,7 @@ import logger from '../config/logger.js';
 
 // Standard TTL: 10 minutes (600s)
 // Check Period: 120s
-const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
+const cache = new NodeCache({ stdTTL: 600, checkperiod: 120, maxKeys: 1000 });
 
 export const get = (key) => {
     const value = cache.get(key);

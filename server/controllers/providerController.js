@@ -5,6 +5,8 @@ import cacheService from '../services/cacheService.js';
 import { notifyAdmin } from '../services/notificationService.js';
 import { notifyAllAdmins } from './notificationController.js';
 import { ensureBookingPricingColumns, getBookingPricingFromRow } from '../services/commissionService.js';
+import { getPublicProviderName } from '../utils/publicDtos.js';
+import { isValidUuid } from '../utils/identifiers.js';
 
 // Helper: Get valid KYC field IDs from DB
 const getActiveKycFieldIds = async () => {
@@ -154,6 +156,17 @@ export const updateProfile = async (req, res, next) => {
 
         // Also accept any field starting with 'kyc_' that exists in valid fields
         const allFileFields = Object.keys(files);
+        const invalidKycField = allFileFields.find(
+            field => field.startsWith('kyc_') && !validKycFields.includes(field)
+        );
+        if (invalidKycField) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'El documento KYC no corresponde a un requisito vigente.',
+                code: 'INVALID_KYC_FIELD'
+            });
+        }
+
         for (const field of allFileFields) {
             if (field.startsWith('kyc_') && validKycFields.includes(field)) {
                 kycDocsUpdates[field] = {
@@ -773,7 +786,7 @@ export const getAllProviders = async (req, res, next) => {
                 pp.payouts_enabled
             FROM users u
             JOIN provider_profiles pp ON u.id = pp.user_id
-            WHERE u.role = 'provider'
+            WHERE u.role = 'provider' AND pp.is_verified = TRUE AND COALESCE(u.is_blocked, FALSE) = FALSE
             ORDER BY u.created_at DESC
         `;
         const result = await pool.query(query);
@@ -798,8 +811,8 @@ export const getAllProviders = async (req, res, next) => {
                 reviews: 0, // Mock
                 tagline: row.tagline ? row.tagline.substring(0, 60) + '...' : 'Proveedor de Servicios',
                 verified: row.verified,
-                status: row.verified ? 'Activo' : 'Pendiente',
-                payoutsEnabled: row.payouts_enabled !== false // Default to true if null/undefined
+                status: 'Activo'
+                // Financial settlement state is intentionally private.
             };
         });
 
@@ -818,6 +831,13 @@ export const getAllProviders = async (req, res, next) => {
 // GET /api/providers/:id (Public)
 export const getPublicProviderProfile = async (req, res, next) => {
     const { id } = req.params;
+    if (!isValidUuid(id)) {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Identificador de proveedor invalido.',
+            code: 'INVALID_PROVIDER_ID'
+        });
+    }
     let debugStep = 'start';
 
     try {
@@ -828,7 +848,7 @@ export const getPublicProviderProfile = async (req, res, next) => {
                 u.id,
                 u.email,
                 u.created_at as joined_date,
-                pp.full_name,
+                pp.store_name, pp.full_name,
                 pp.bio,
                 CASE WHEN pp.profile_image_status = 'approved' THEN pp.profile_image_url ELSE NULL END as profile_image_url,
                 CASE WHEN pp.banner_image_status = 'approved' THEN pp.banner_image_url ELSE NULL END as banner_image_url,
@@ -838,8 +858,8 @@ export const getPublicProviderProfile = async (req, res, next) => {
                 pp.coverage_communes,
                 pp.is_verified
             FROM users u
-            LEFT JOIN provider_profiles pp ON u.id = pp.user_id
-            WHERE u.id = $1 AND u.role = 'provider'
+            JOIN provider_profiles pp ON u.id = pp.user_id
+            WHERE u.id = $1 AND u.role = 'provider' AND pp.is_verified = TRUE AND COALESCE(u.is_blocked, FALSE) = FALSE
         `;
         const profileRes = await pool.query(profileQuery, [id]);
 
@@ -868,7 +888,7 @@ export const getPublicProviderProfile = async (req, res, next) => {
             FROM services s
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN reviews r ON s.id = r.service_id
-            WHERE s.provider_id = $1 AND s.is_active = true
+            WHERE s.provider_id = $1 AND s.is_active = true AND s.moderation_status = 'approved'
             GROUP BY s.id, s.title, s.price, s.video_url, s.image_urls, s.cover_image_url, s.category,
                      sc.commission_percentage, sc.commission_type, sc.fixed_commission
         `;
@@ -932,7 +952,7 @@ export const getPublicProviderProfile = async (req, res, next) => {
             status: 'success',
             data: {
                 id,
-                name: profile.full_name || profile.email || 'Proveedor',
+                name: getPublicProviderName(profile),
                 tagline: profile.bio ? profile.bio.substring(0, 50) + '...' : 'Proveedor Verificado',
                 location: coverage.location,
                 coverage_region_code: coverage.coverage_region_code,
@@ -952,9 +972,9 @@ export const getPublicProviderProfile = async (req, res, next) => {
                     id: s.id,
                     title: s.title,
                     price: s.price,
-                    commission_percentage: s.commission_percentage,
-                    commission_type: s.commission_type,
-                    fixed_commission: s.fixed_commission,
+                    // Commission rules are intentionally excluded from public responses.
+                    // Checkout obtains customer-facing totals from the quote endpoint.
+                    // No settlement configuration is exposed here.
                     location: coverage.location,
                     coverage_region_code: coverage.coverage_region_code,
                     coverage_region_name: coverage.coverage_region_name,
@@ -977,9 +997,9 @@ export const getPublicProviderProfile = async (req, res, next) => {
         console.error(`[PROVIDER PROFILE ERROR] Step: ${debugStep}, Error: ${err.message}`);
         res.status(500).json({
             status: 'error',
-            debugStep: debugStep,
-            message: err.message,
-            codeVersion: '2024-02-01-v4'
+            // Internal diagnostics remain in server logs only.
+            message: 'No se pudo cargar el perfil del proveedor.',
+            // No database or deployment details are returned publicly.
         });
     }
 };

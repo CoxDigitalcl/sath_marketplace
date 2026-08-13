@@ -3,6 +3,8 @@ import logger from '../config/logger.js';
 import crypto from 'crypto';
 import cacheService from '../services/cacheService.js';
 import { parseCoverageCommunes } from '../../shared/chileLocations.js';
+import { toPublicServiceDto } from '../utils/publicDtos.js';
+import { isValidUuid } from '../utils/identifiers.js';
 
 
 const PROMOTION_PAYMENT_STATUSES = new Set(['PAID', 'PENDING_DEDUCTION', 'PENDING', 'EXPIRED']);
@@ -100,14 +102,14 @@ export const createPromotion = async (req, res, next) => {
         }
 
         // Verify ownership
-        const serviceCheck = await pool.query('SELECT provider_id, is_active FROM services WHERE id = $1', [serviceId]);
+        const serviceCheck = await pool.query('SELECT provider_id, is_active, moderation_status FROM services WHERE id = $1', [serviceId]);
         if (serviceCheck.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Servicio no encontrado' });
         }
         if (serviceCheck.rows[0].provider_id !== userId) {
             return res.status(403).json({ status: 'error', message: 'No autorizado para promocionar este servicio' });
         }
-        if (!serviceCheck.rows[0].is_active) {
+        if (!serviceCheck.rows[0].is_active || serviceCheck.rows[0].moderation_status !== 'approved') {
             return res.status(400).json({ status: 'error', message: 'Solo puedes promocionar servicios activos' });
         }
 
@@ -177,11 +179,11 @@ export const createService = async (req, res, next) => {
 
         const query = `
             INSERT INTO services (
-                provider_id, title, description, category, price, video_url, is_active, 
+                provider_id, title, description, category, price, video_url, is_active, moderation_status,
                 duration_minutes, type, availability_type, calendar_config, features, image_urls, categories_json, cover_image_url, gallery_media, pricing_type,
                 freight_base_price, freight_price_per_km
             )
-            VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, false, 'pending', $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING *
         `;
 
@@ -211,7 +213,7 @@ export const createService = async (req, res, next) => {
 
         res.status(201).json({
             status: 'success',
-            message: 'Service created successfully',
+            message: 'Servicio creado y enviado a revision.',
             service: result.rows[0]
         });
 
@@ -269,6 +271,10 @@ export const updateService = async (req, res, next) => {
                 pricing_type = COALESCE($16, pricing_type),
                 freight_base_price = COALESCE($17, freight_base_price),
                 freight_price_per_km = COALESCE($18, freight_price_per_km),
+                moderation_status = 'pending',
+                moderation_reason = NULL,
+                moderated_at = NULL,
+                moderated_by = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $19
             RETURNING *
@@ -332,12 +338,12 @@ export const getFeaturedServices = async (req, res, next) => {
                    COALESCE(AVG(r.rating), 0) as avg_rating,
                    COUNT(r.id) as review_count
             FROM services s
-            JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             JOIN featured_promotions sp ON s.id = sp.service_id
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN reviews r ON s.id = r.service_id
-            WHERE s.is_active = true 
-              AND p.is_verified = true
+            WHERE s.is_active = true AND s.moderation_status = 'approved'
+              AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
               AND sp.payment_status = 'PAID'
               AND sp.end_date > NOW()
             GROUP BY s.id, s.title, s.description, s.price, s.image_urls, s.video_url, s.is_active,
@@ -347,7 +353,7 @@ export const getFeaturedServices = async (req, res, next) => {
             LIMIT 8
         `;
         const sponsoredRes = await pool.query(sponsoredQuery);
-        responseData.sponsored = sponsoredRes.rows.map(row => ({
+        responseData.sponsored = sponsoredRes.rows.map(row => toPublicServiceDto({
             ...row,
             isSponsored: true,
             rating: row.review_count > 0 ? parseFloat(row.avg_rating).toFixed(1) : null
@@ -365,11 +371,11 @@ export const getFeaturedServices = async (req, res, next) => {
                    COALESCE(AVG(r.rating), 0) as avg_rating,
                    COUNT(DISTINCT r.id) as review_count
             FROM services s
-            JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN bookings b ON s.id = b.service_id AND b.status IN ('completed', 'confirmed')
             LEFT JOIN reviews r ON s.id = r.service_id
-            WHERE s.is_active = true AND p.is_verified = true
+            WHERE s.is_active = true AND s.moderation_status = 'approved' AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
             GROUP BY s.id, s.title, s.description, s.price, s.image_urls, s.video_url, s.is_active,
                      p.full_name, p.coverage_area, p.coverage_region_code, p.coverage_region_name, p.coverage_communes,
                      sc.commission_percentage, sc.commission_type, sc.fixed_commission
@@ -377,7 +383,7 @@ export const getFeaturedServices = async (req, res, next) => {
             LIMIT 8
         `;
         const bestSellersRes = await pool.query(bestSellersQuery);
-        responseData.bestSellers = bestSellersRes.rows.map(row => ({
+        responseData.bestSellers = bestSellersRes.rows.map(row => toPublicServiceDto({
             ...row,
             isSponsored: false,
             rating: row.review_count > 0 ? parseFloat(row.avg_rating).toFixed(1) : null
@@ -394,11 +400,11 @@ export const getFeaturedServices = async (req, res, next) => {
                    COALESCE(AVG(r.rating), 0) as avg_rating,
                    COUNT(r.id) as review_count
             FROM services s
-            JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN reviews r ON s.id = r.service_id
-            WHERE s.is_active = true 
-              AND p.is_verified = true
+            WHERE s.is_active = true AND s.moderation_status = 'approved'
+              AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
               AND s.is_staff_pick = true
             GROUP BY s.id, s.title, s.description, s.price, s.image_urls, s.video_url, s.is_active,
                      p.full_name, p.coverage_area, p.coverage_region_code, p.coverage_region_name, p.coverage_communes,
@@ -406,7 +412,7 @@ export const getFeaturedServices = async (req, res, next) => {
             LIMIT 8
         `;
         const staffPicksRes = await pool.query(staffPicksQuery);
-        responseData.staffPicks = staffPicksRes.rows.map(row => ({
+        responseData.staffPicks = staffPicksRes.rows.map(row => toPublicServiceDto({
             ...row,
             isSponsored: false,
             rating: row.review_count > 0 ? parseFloat(row.avg_rating).toFixed(1) : null
@@ -423,11 +429,11 @@ export const getFeaturedServices = async (req, res, next) => {
                    COALESCE(AVG(r.rating), 0) as avg_rating,
                    COUNT(r.id) as review_count
             FROM services s
-            JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN reviews r ON s.id = r.service_id
-            WHERE s.is_active = true 
-              AND p.is_verified = true
+            WHERE s.is_active = true AND s.moderation_status = 'approved'
+              AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
               AND s.created_at >= NOW() - INTERVAL '7 days'
             GROUP BY s.id, s.title, s.description, s.price, s.image_urls, s.video_url, s.is_active, s.created_at,
                      p.full_name, p.coverage_area, p.coverage_region_code, p.coverage_region_name, p.coverage_communes,
@@ -448,10 +454,10 @@ export const getFeaturedServices = async (req, res, next) => {
                        COALESCE(AVG(r.rating), 0) as avg_rating,
                        COUNT(r.id) as review_count
                 FROM services s
-                JOIN provider_profiles p ON s.provider_id = p.user_id
+                JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
                 LEFT JOIN service_categories sc ON s.category = sc.id
                 LEFT JOIN reviews r ON s.id = r.service_id
-                WHERE s.is_active = true AND p.is_verified = true
+                WHERE s.is_active = true AND s.moderation_status = 'approved' AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
                 GROUP BY s.id, s.title, s.description, s.price, s.image_urls, s.video_url, s.is_active, s.created_at,
                          p.full_name, p.coverage_area, p.coverage_region_code, p.coverage_region_name, p.coverage_communes,
                          sc.commission_percentage, sc.commission_type, sc.fixed_commission
@@ -460,7 +466,7 @@ export const getFeaturedServices = async (req, res, next) => {
             `;
             newArrivalsRes = await pool.query(newArrivalsQuery);
         }
-        responseData.newArrivals = newArrivalsRes.rows.map(row => ({
+        responseData.newArrivals = newArrivalsRes.rows.map(row => toPublicServiceDto({
             ...row,
             isSponsored: false,
             rating: row.review_count > 0 ? parseFloat(row.avg_rating).toFixed(1) : null
@@ -481,9 +487,34 @@ export const getFeaturedServices = async (req, res, next) => {
 // GET /api/services?category=...&q=...&region=...&commune=...
 export const getServices = async (req, res, next) => {
     try {
-        const { category, q, region, commune } = req.query;
+        const { category, q, region, commune, page = '1', limit = '50' } = req.query;
         const regionFilter = String(region || '').trim().toUpperCase();
         const communeFilters = [...new Set(parseCoverageCommunes(commune))];
+        const categoryFilter = String(category || '').trim();
+        const searchFilter = String(q || '').trim();
+        const pageNumber = Number(page);
+        const pageSize = Number(limit);
+
+        const invalidQuery = (
+            categoryFilter.length > 100 ||
+            searchFilter.length > 100 ||
+            regionFilter.length > 10 ||
+            communeFilters.length > 20 ||
+            !/^\d+$/.test(String(page)) ||
+            !/^\d+$/.test(String(limit)) ||
+            !Number.isSafeInteger(pageNumber) ||
+            !Number.isSafeInteger(pageSize) ||
+            pageNumber < 1 ||
+            pageSize < 1 ||
+            pageSize > 100
+        );
+        if (invalidQuery) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Los parametros de busqueda no son validos.',
+                code: 'INVALID_SERVICE_QUERY'
+            });
+        }
 
         // Use only paid and active promotions. Pending rows must not shadow a valid paid promotion.
         let query = `
@@ -496,7 +527,7 @@ export const getServices = async (req, res, next) => {
                    COALESCE(sc.commission_type, 'PERCENTAGE') as commission_type,
                    COALESCE(sc.fixed_commission, 0) as fixed_commission
             FROM services s 
-            JOIN provider_profiles p ON s.provider_id = p.user_id 
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
             LEFT JOIN LATERAL (
                 SELECT sp.payment_status, sp.start_date, sp.end_date, sp.target_keywords
@@ -507,19 +538,19 @@ export const getServices = async (req, res, next) => {
                 ORDER BY sp.start_date ASC
                 LIMIT 1
             ) lp ON true
-            WHERE s.is_active = true AND p.is_verified = true
+            WHERE s.is_active = true AND s.moderation_status = 'approved' AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
         `;
 
         const params = [];
         let whereConditions = [];
 
-        if (category) {
-            params.push(category);
+        if (categoryFilter) {
+            params.push(categoryFilter);
             whereConditions.push(`s.category = $${params.length}`);
         }
 
-        if (q) {
-            params.push(`%${q}%`);
+        if (searchFilter) {
+            params.push(`%${searchFilter}%`);
             whereConditions.push(`(
                 s.title ILIKE $${params.length} 
                 OR s.description ILIKE $${params.length}
@@ -549,7 +580,7 @@ export const getServices = async (req, res, next) => {
         // Custom Ordering for Search:
         // 1. Active Sponsored matching query (Oldest promotion start date first)
         // 2. Normal ordering (Newest services first)
-        if (q) {
+        if (searchFilter) {
             query += `
                 ORDER BY 
                 CASE WHEN lp.payment_status = 'PAID' THEN 0 ELSE 1 END,
@@ -560,15 +591,24 @@ export const getServices = async (req, res, next) => {
             query += ' ORDER BY s.created_at DESC';
         }
 
+        const offset = (pageNumber - 1) * pageSize;
+        params.push(pageSize, offset);
+        query += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
+
         const result = await pool.query(query, params);
 
         res.json({
             status: 'success',
             count: result.rows.length,
-            services: result.rows.map(row => ({
+            services: result.rows.map(row => toPublicServiceDto({
                 ...row,
                 isSponsored: !!row.is_sponsored // Convert to boolean for frontend
-            }))
+            })),
+            pagination: {
+                page: pageNumber,
+                limit: pageSize,
+                hasMore: result.rows.length === pageSize
+            }
         });
     } catch (err) {
         next(err);
@@ -580,6 +620,13 @@ export const getServices = async (req, res, next) => {
 export const getServiceById = async (req, res, next) => {
     try {
         const { id } = req.params;
+        if (!isValidUuid(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Identificador de servicio invalido.',
+                code: 'INVALID_SERVICE_ID'
+            });
+        }
         const query = `
             SELECT s.*, 
                    p.full_name as provider_name, 
@@ -595,9 +642,9 @@ export const getServiceById = async (req, res, next) => {
                    COALESCE(sc.commission_type, 'PERCENTAGE') as commission_type,
                    COALESCE(sc.fixed_commission, 0) as fixed_commission
             FROM services s 
-            JOIN provider_profiles p ON s.provider_id = p.user_id 
+            JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
-            WHERE s.id = $1 AND p.is_verified = true
+            WHERE s.id = $1 AND s.is_active = true AND s.moderation_status = 'approved' AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
         `;
         const result = await pool.query(query, [id]);
 
@@ -607,7 +654,7 @@ export const getServiceById = async (req, res, next) => {
 
         res.json({
             status: 'success',
-            service: result.rows[0]
+            service: toPublicServiceDto(result.rows[0])
         });
     } catch (err) {
         next(err);
@@ -637,7 +684,11 @@ export const getMyServices = async (req, res, next) => {
             name: row.title,
             price_clp: row.price,
             iva_clp: Math.round(row.price * 0.19),
-            status: row.is_active ? 'active' : 'paused',
+            status: row.moderation_status === 'pending'
+                ? 'draft'
+                : row.moderation_status === 'rejected'
+                    ? 'flagged'
+                    : (row.is_active ? 'active' : 'paused'),
             videoUrl: row.video_url,
             coverImageUrl: row.cover_image_url || '',
             galleryMedia: row.gallery_media || [],
@@ -831,6 +882,64 @@ export const getAdminServices = async (req, res, next) => {
         });
     } catch (err) {
         logger.error(`Get Admin Services Error: ${err.message}`);
+        next(err);
+    }
+};
+
+// PATCH /api/admin/services/:id/moderation
+export const moderateService = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const status = String(req.body?.status || '').trim().toLowerCase();
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
+
+        if (!isValidUuid(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Identificador de servicio invalido.',
+                code: 'INVALID_SERVICE_ID'
+            });
+        }
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Estado de moderacion invalido.',
+                code: 'INVALID_MODERATION_STATUS'
+            });
+        }
+        if (status === 'rejected' && !reason) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Indica el motivo del rechazo.',
+                code: 'MODERATION_REASON_REQUIRED'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE services
+             SET moderation_status = $1,
+                 moderation_reason = $2,
+                 moderated_at = NOW(),
+                 moderated_by = $3,
+                 is_active = ($1 = 'approved'),
+                 updated_at = NOW()
+             WHERE id = $4
+             RETURNING id, moderation_status, moderation_reason, moderated_at, is_active`,
+            [status, reason || null, req.user.id, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Servicio no encontrado.' });
+        }
+
+        clearPublicServiceCache();
+        return res.json({
+            status: 'success',
+            message: status === 'approved' ? 'Servicio aprobado y publicado.' : 'Servicio rechazado.',
+            service: result.rows[0]
+        });
+    } catch (err) {
+        logger.error(`Service moderation failed: ${err.message}`);
         next(err);
     }
 };

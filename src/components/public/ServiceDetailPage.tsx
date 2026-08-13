@@ -107,9 +107,6 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                             ? s.image_urls
                             : [],
                         pricing_type: s.pricing_type || 'per_event',
-                        commission_percentage: s.commission_percentage != null ? Number(s.commission_percentage) : 10,
-                        commission_type: s.commission_type || 'PERCENTAGE',
-                        fixed_commission: s.fixed_commission != null ? Number(s.fixed_commission) : 0,
                         // Freight fields
                         freight_base_price: s.freight_base_price ? parseFloat(s.freight_base_price) : null,
                         freight_price_per_km: s.freight_price_per_km ? parseFloat(s.freight_price_per_km) : null,

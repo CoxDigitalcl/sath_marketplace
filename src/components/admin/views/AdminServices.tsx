@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../../api/client';
 import { Service } from '../../../types';
-import { Search, Star, Filter, Loader } from 'lucide-react';
+import { Search, Star, Filter, Loader, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const AdminServices: React.FC = () => {
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filter, setFilter] = useState<'all' | 'staff_pick'>('all');
+    const [filter, setFilter] = useState<'all' | 'pending' | 'staff_pick'>('all');
 
     const fetchServices = async () => {
         setLoading(true);
@@ -43,10 +43,39 @@ const AdminServices: React.FC = () => {
         }
     };
 
+
+    const moderateService = async (serviceId: string, status: 'approved' | 'rejected') => {
+        const reason = status === 'rejected'
+            ? window.prompt('Motivo del rechazo (obligatorio):')?.trim()
+            : '';
+        if (status === 'rejected' && !reason) return;
+
+        try {
+            const response = await api.patch(`/admin/services/${serviceId}/moderation`, { status, reason });
+            if (response.data.status === 'success') {
+                const updated = response.data.service;
+                setServices(current => current.map(service => (
+                    service.id === serviceId
+                        ? {
+                            ...service,
+                            moderation_status: updated.moderation_status,
+                            moderation_reason: updated.moderation_reason,
+                            status: updated.is_active ? 'active' : (updated.moderation_status === 'rejected' ? 'flagged' : 'draft')
+                        }
+                        : service
+                )));
+                toast.success(response.data.message);
+            }
+        } catch (error) {
+            toast.error('No se pudo actualizar la moderacion del servicio.');
+        }
+    };
     const filteredServices = services.filter(service => {
         const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             service.provider?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filter === 'all' || (filter === 'staff_pick' && service.is_staff_pick);
+        const matchesFilter = filter === 'all' ||
+            (filter === 'pending' && service.moderation_status === 'pending') ||
+            (filter === 'staff_pick' && service.is_staff_pick);
         return matchesSearch && matchesFilter;
     });
 
@@ -78,6 +107,7 @@ const AdminServices: React.FC = () => {
                     >
                         <option value="all">Todos</option>
                         <option value="staff_pick">Staff Picks</option>
+                        <option value="pending">Pendientes de revisi?n</option>
                     </select>
                 </div>
             </div>
@@ -90,12 +120,13 @@ const AdminServices: React.FC = () => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff Pick</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Moderaci?n</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredServices.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
                                     No se encontraron servicios. (Verifica conexión API o filtros)
                                 </td>
                             </tr>
@@ -126,6 +157,39 @@ const AdminServices: React.FC = () => {
                                     >
                                         <Star size={20} fill={service.is_staff_pick ? "currentColor" : "none"} />
                                     </button>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                            service.moderation_status === 'approved'
+                                                ? 'bg-green-100 text-green-800'
+                                                : service.moderation_status === 'rejected'
+                                                    ? 'bg-red-100 text-red-800'
+                                                    : 'bg-amber-100 text-amber-800'
+                                        }`}>
+                                            {service.moderation_status === 'approved'
+                                                ? 'Aprobado'
+                                                : service.moderation_status === 'rejected'
+                                                    ? 'Rechazado'
+                                                    : 'Pendiente'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => moderateService(service.id, 'approved')}
+                                            className="rounded p-1 text-green-700 hover:bg-green-50"
+                                            title="Aprobar y publicar"
+                                        >
+                                            <CheckCircle size={19} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => moderateService(service.id, 'rejected')}
+                                            className="rounded p-1 text-red-700 hover:bg-red-50"
+                                            title="Rechazar"
+                                        >
+                                            <XCircle size={19} />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

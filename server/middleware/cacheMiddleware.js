@@ -11,8 +11,20 @@ export const checkCache = (duration = 300) => (req, res, next) => {
         return next();
     }
 
-    // Generate Cache Key based on URL string (including query params)
-    const key = `__express__${req.originalUrl || req.url}`;
+    const rawUrl = req.originalUrl || req.url || '';
+    if (rawUrl.length > 2048) {
+        return next();
+    }
+
+    const query = new URLSearchParams();
+    Object.entries(req.query || {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .forEach(([name, value]) => {
+            const values = Array.isArray(value) ? value : [value];
+            values.map(item => String(item)).sort().forEach(item => query.append(name, item));
+        });
+    const queryString = query.toString();
+    const key = `__express__${req.baseUrl || ''}${req.path || ''}${queryString ? `?${queryString}` : ''}`;
 
     // 1. Try to get data from cache
     const cachedResponse = cacheService.get(key);
