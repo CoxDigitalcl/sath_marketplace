@@ -2,7 +2,6 @@ import 'dotenv/config'; // Load env vars before generic imports
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 // Note: In ESM, we must use extensions like .js
 import logger from './config/logger.js';
@@ -12,6 +11,7 @@ import securitySetup from './middleware/security.js';
 import createRequestContextMiddleware from './middleware/requestContext.js';
 import createHttpsRedirectMiddleware from './middleware/httpsRedirect.js';
 import performanceLogger from './middleware/performanceLogger.js';
+import createSeoFrontendRouter from './middleware/seoFrontend.js';
 import db from './config/db.js';
 import authRoutes from './routes/authRoute.js';
 import providerRoutes from './routes/providerRoute.js';
@@ -110,108 +110,10 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// 5. Serve Frontend
+// 5. Serve Frontend through the single SEO-aware production router.
 if (process.env.NODE_ENV === 'production') {
     const buildPath = path.join(__dirname, '..', 'dist');
-
-    // Serve static assets
-    app.use('/assets', express.static(path.join(buildPath, 'assets'), {
-        maxAge: '1y',
-        immutable: true
-    }));
-    app.use(express.static(buildPath, {
-        index: false,
-        maxAge: '1y',
-        setHeaders: (res, filePath) => {
-            if (path.extname(filePath).toLowerCase() === '.html') {
-                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            }
-        }
-    }));
-
-    // SSR Lite for Provider Profiles (OpenGraph Meta Tags)
-    app.get('/provider/:id', async (req, res, next) => {
-        try {
-            const providerId = req.params.id;
-            
-            // Validate UUID manually if needed, otherwise query will fail gracefully
-            if (!providerId || typeof providerId !== 'string') return next();
-
-            try {
-                // Fetch provider details strictly for Meta Tags
-                const query = `
-                    SELECT 
-                        COALESCE(pp.full_name, pp.store_name, 'Proveedor') as name,
-                        pp.bio,
-                        pp.profile_image_url
-                    FROM provider_profiles pp
-                    WHERE pp.user_id = $1
-                `;
-                const result = await db.pool.query(query, [providerId]);
-                
-                let name = "Proveedor Servicios a tu Hogar";
-                let bio = "Encuentra al mejor profesional en Servicios a tu Hogar.";
-                let imageUrl = "https://serviciosatuhogar.cl/assets/logo.png";
-
-                if (result.rows.length > 0) {
-                    const p = result.rows[0];
-                    name = `${p.name} | Servicios a tu Hogar`;
-                    bio = p.bio ? (p.bio.substring(0, 150) + (p.bio.length > 150 ? '...' : '')) : bio;
-                    if (p.profile_image_url) {
-                        // Profile image URLs might be relative like "/uploads/xxx.jpg", prepend domain
-                        imageUrl = p.profile_image_url.startsWith('http') ? p.profile_image_url : `https://serviciosatuhogar.cl${p.profile_image_url}`; 
-                    }
-                }
-
-                const indexPath = path.join(buildPath, 'index.html');
-                if (fs.existsSync(indexPath)) {
-                    let htmlData = fs.readFileSync(indexPath, 'utf8');
-                    
-                    // Inject OpenGraph Meta Tags
-                    const metaTags = `
-    <meta property="og:title" content="${name.replace(/"/g, '&quot;')}" />
-    <meta property="og:description" content="${bio.replace(/"/g, '&quot;').replace(/\n/g, ' ')}" />
-    <meta property="og:image" content="${imageUrl}" />
-    <meta property="og:url" content="https://serviciosatuhogar.cl/provider/${providerId}" />
-    <meta property="og:type" content="profile" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${name.replace(/"/g, '&quot;')}" />
-    <meta name="twitter:description" content="${bio.replace(/"/g, '&quot;').replace(/\n/g, ' ')}" />
-    <meta name="twitter:image" content="${imageUrl}" />
-</head>`;
-                    
-                    // Replace the closing </head> tag with our injected tags + closing tag
-                    htmlData = htmlData.replace('</head>', metaTags);
-                    return res.send(htmlData);
-                } else {
-                    return next(); 
-                }
-            } catch (dbErr) {
-                // Ignore invalid UUID syntax errors from DB and fallback
-                return next();
-            }
-        } catch (err) {
-            console.error('[OpenGraph Injector Error]', err);
-            return next(); 
-        }
-    });
-
-    // SPA catch-all: Use regex for Express 5 compatibility
-    app.get(/.*/, (req, res, next) => {
-        // Skip API routes
-        if (req.url.startsWith('/api')) return next();
-
-        // Return 404 for missing static assets instead of serving index.html
-        if (req.url.includes('.js') || req.url.includes('.css')) {
-            return res.status(404).send('Asset not found');
-        }
-
-        res.sendFile(path.join(buildPath, 'index.html'), (err) => {
-            if (err) {
-                res.status(500).send("Error loading frontend");
-            }
-        });
-    });
+    app.use(createSeoFrontendRouter({ buildPath, db }));
 }
 
 // 6. Error Handling

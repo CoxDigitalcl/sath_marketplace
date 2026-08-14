@@ -16,6 +16,7 @@ const SITE_ORIGIN = 'https://serviciosatuhogar.cl';
 const VERIFIED_PROVIDER_ID = '11111111-1111-4111-8111-111111111111';
 const MISSING_PROVIDER_ID = '22222222-2222-4222-8222-222222222222';
 const SERVICE_ID = '33333333-3333-4333-8333-333333333333';
+const MISSING_SERVICE_ID = '44444444-4444-4444-8444-444444444444';
 const INDEX_HTML = `<!doctype html>
 <html lang="es">
 <head>
@@ -29,13 +30,69 @@ const INDEX_HTML = `<!doctype html>
 let server;
 let baseUrl;
 
-before(async () => {
-    process.env.APP_URL = SITE_ORIGIN;
+const fakeDb = {
+    pool: {
+        query: async (sql, params = []) => {
+            assert.doesNotMatch(sql, /u\.is_verified/, 'provider publication must use provider_profiles.is_verified');
 
-    const fakeDb = {
-        pool: {
-            query: async (sql, params) => {
-                assert.match(sql, /u\.is_verified = TRUE/);
+            if (/FROM platform_settings/.test(sql)) {
+                assert.match(sql, /group_name = 'legal_policies'/);
+                return {
+                    rows: [{
+                        key: 'legal_policies',
+                        value: [
+                            {
+                                title: 'Política <segura> de privacidad',
+                                slug: 'politica-de-privacidad',
+                                content: '<p>Explica el tratamiento responsable de datos personales.</p>',
+                                isActive: true
+                            },
+                            {
+                                title: 'Borrador interno',
+                                slug: 'borrador-interno',
+                                content: '<p>No publicar.</p>',
+                                isActive: false
+                            }
+                        ]
+                    }]
+                };
+            }
+
+            if (/SELECT\s+s\.id\s+FROM services s/.test(sql) && params.length === 0) {
+                assert.match(sql, /s\.is_active = TRUE/);
+                assert.match(sql, /s\.moderation_status = 'approved'/);
+                assert.match(sql, /pp\.is_verified = TRUE/);
+                assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
+                return { rows: [{ id: SERVICE_ID }, { id: 'not-a-uuid' }] };
+            }
+
+            if (/SELECT\s+pp\.user_id AS id\s+FROM provider_profiles pp/.test(sql) && params.length === 0) {
+                assert.match(sql, /pp\.is_verified = TRUE/);
+                assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
+                return { rows: [{ id: VERIFIED_PROVIDER_ID }, { id: 'not-a-uuid' }] };
+            }
+
+            if (/FROM services s/.test(sql) && params.length === 1) {
+                assert.match(sql, /s\.is_active = TRUE/);
+                assert.match(sql, /s\.moderation_status = 'approved'/);
+                assert.match(sql, /pp\.is_verified = TRUE/);
+                assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
+                if (params[0] !== SERVICE_ID) return { rows: [] };
+                return {
+                    rows: [{
+                        id: SERVICE_ID,
+                        title: 'Gasfitería <urgente>',
+                        description: 'Reparación segura de filtraciones y artefactos.',
+                        image_urls: ['/uploads/service-photo.webp'],
+                        provider_name: 'Ana Servicios'
+                    }]
+                };
+            }
+
+            if (/FROM provider_profiles pp/.test(sql) && params.length === 1) {
+                assert.match(sql, /pp\.is_verified = TRUE/);
+                assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
+                assert.match(sql, /profile_image_status = 'approved'/);
                 if (params[0] !== VERIFIED_PROVIDER_ID) return { rows: [] };
                 return {
                     rows: [{
@@ -45,8 +102,15 @@ before(async () => {
                     }]
                 };
             }
+
+            throw new Error(`Unexpected SEO query: ${sql}`);
         }
-    };
+    }
+};
+
+before(async () => {
+    process.env.APP_URL = SITE_ORIGIN;
+
     const app = express();
     app.use(createSeoFrontendRouter({ db: fakeDb, indexHtml: INDEX_HTML }));
     app.use((req, res) => res.status(404).send('Not found'));
@@ -54,8 +118,7 @@ before(async () => {
     await new Promise((resolve) => {
         server = app.listen(0, '127.0.0.1', resolve);
     });
-    const address = server.address();
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 after(async () => {
@@ -85,7 +148,7 @@ test('robots.txt points to the sitemap and keeps private surfaces out of crawl',
     assert.match(robots, /^Sitemap: https:\/\/serviciosatuhogar\.cl\/sitemap\.xml$/m);
 });
 
-test('sitemap contains only the reviewed static public canonical URLs', () => {
+test('static sitemap helper remains restricted to reviewed canonical roots', () => {
     const sitemap = buildSitemapXml(SITE_ORIGIN);
 
     assert.match(sitemap, /<loc>https:\/\/serviciosatuhogar\.cl\/<\/loc>/);
@@ -112,7 +175,7 @@ test('metadata injection replaces old tags and escapes database-controlled value
     assert.match(html, /rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/provider\//);
 });
 
-test('robots and sitemap endpoints return real text/XML resources with bounded caching', async () => {
+test('robots and dynamic sitemap return real resources with bounded caching', async () => {
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     assert.equal(robotsResponse.status, 200);
     assert.match(robotsResponse.headers.get('content-type'), /^text\/plain/);
@@ -125,10 +188,16 @@ test('robots and sitemap endpoints return real text/XML resources with bounded c
     assert.match(sitemapResponse.headers.get('cache-control'), /max-age=3600/);
     const sitemap = await sitemapResponse.text();
     assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+    assert.match(sitemap, new RegExp(`/categories/hogar`));
+    assert.match(sitemap, new RegExp(`/service/${SERVICE_ID}`));
+    assert.match(sitemap, new RegExp(`/provider/${VERIFIED_PROVIDER_ID}`));
+    assert.match(sitemap, /\/legal\/politica-de-privacidad/);
+    assert.equal(sitemap.includes('borrador-interno'), false);
+    assert.equal(sitemap.includes('not-a-uuid'), false);
     assert.equal(sitemap.includes('/checkout'), false);
 });
 
-test('public shell has canonical metadata and is never cached for one year', async () => {
+test('public shell has canonical metadata and short-lived HTML caching', async () => {
     const response = await fetch(`${baseUrl}/`);
     const html = await response.text();
 
@@ -156,24 +225,62 @@ test('private, transactional, search, and tokenized routes emit noindex headers'
     assert.match(searchHtml, /rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/search"/);
 });
 
-test('unknown routes and malformed dynamic IDs return an honest 404 with noindex', async () => {
-    for (const pathname of ['/invented-route', '/provider/not-a-uuid', '/assets/missing.js']) {
+test('unknown, malformed, and unpublished resources return an honest 404', async () => {
+    const paths = [
+        '/invented-route',
+        '/provider/not-a-uuid',
+        `/provider/${MISSING_PROVIDER_ID}`,
+        `/service/${MISSING_SERVICE_ID}`,
+        '/categories/no-publicada',
+        '/legal/borrador-interno',
+        '/assets/missing.js'
+    ];
+
+    for (const pathname of paths) {
         const response = await fetch(`${baseUrl}${pathname}`);
+        const body = await response.text();
         assert.equal(response.status, 404, pathname);
         assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive', pathname);
+        assert.equal(body.includes('rel="canonical"'), false, pathname);
     }
 });
 
-test('provider metadata is emitted only for a verified provider record', async () => {
-    const verifiedResponse = await fetch(`${baseUrl}/provider/${VERIFIED_PROVIDER_ID}`);
-    const verifiedHtml = await verifiedResponse.text();
-    assert.equal(verifiedResponse.status, 200);
-    assert.equal(verifiedResponse.headers.get('x-robots-tag'), 'index, follow');
-    assert.match(verifiedHtml, /Ana &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
-    assert.match(verifiedHtml, /https:\/\/serviciosatuhogar\.cl\/uploads\/provider-photo\.webp/);
+test('curated categories receive unique public metadata', async () => {
+    const response = await fetch(`${baseUrl}/categories/hogar`);
+    const html = await response.text();
 
-    const missingResponse = await fetch(`${baseUrl}/provider/${MISSING_PROVIDER_ID}`);
-    assert.equal(missingResponse.status, 404);
-    assert.equal(missingResponse.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
+    assert.match(html, /<title>Hogar y Mantención \| Servicios a tu Hogar<\/title>/);
+    assert.match(html, /rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/categories\/hogar"/);
 });
 
+test('service metadata is emitted only for an approved public service', async () => {
+    const response = await fetch(`${baseUrl}/service/${SERVICE_ID}`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
+    assert.match(html, /Gasfitería &lt;urgente&gt; \| Servicios a tu Hogar/);
+    assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/service-photo\.webp/);
+});
+
+test('provider metadata is emitted only for a verified, unblocked provider', async () => {
+    const response = await fetch(`${baseUrl}/provider/${VERIFIED_PROVIDER_ID}`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
+    assert.match(html, /Ana &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
+    assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/provider-photo\.webp/);
+});
+
+test('only active public legal policies receive canonical metadata', async () => {
+    const response = await fetch(`${baseUrl}/legal/politica-de-privacidad`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
+    assert.match(html, /Política &lt;segura&gt; de privacidad \| Servicios a tu Hogar/);
+    assert.match(html, /tratamiento responsable de datos personales/);
+});
