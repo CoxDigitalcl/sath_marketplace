@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import { PolicyDocument } from '../../types';
-
-interface SettingResponse {
-    group_key: string;
-    value: PolicyDocument[];
-}
+import { readLegalPolicies } from '../../utils/legalPolicies';
 
 const LegalPolicy = () => {
     const { slug } = useParams<{ slug: string }>();
@@ -26,9 +22,10 @@ const LegalPolicy = () => {
                 const response = await fetch('/api/public/settings/legal_policies');
                 // We'll have to create this endpoint or use an existing one. Let's assume we need to add it or it exists.
                 if (response.ok) {
-                    const data: SettingResponse = await response.json();
-                    if (data && data.value && Array.isArray(data.value)) {
-                        const found = data.value.find(p => p.slug === slug || p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') === slug);
+                    const data: unknown = await response.json();
+                    const policies = readLegalPolicies(data);
+                    if (policies.length > 0) {
+                        const found = policies.find(p => p.slug === slug || p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') === slug);
                         if (found && found.isActive) {
                             setPolicy(found);
                         } else {

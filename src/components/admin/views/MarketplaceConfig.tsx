@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Tag, CreditCard, FileText, Users, Shield, Check, Info, Lock, KeyRound, Save, ExternalLink, List, Trash2, Plus, FileSignature, ShieldCheck, AlertCircle, ChevronDown, ChevronUp, Edit2, X, AlertTriangle, HelpCircle, Eye, Receipt, TestTube, RefreshCw, Share2, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import ToggleSwitch from '../provider-management/ToggleSwitch';
+import { buildLegalPoliciesSettingsRequest, readLegalPolicies } from '../../../utils/legalPolicies';
 import { ServiceAttribute, PolicyDocument, PolicyTarget } from '../../../types';
 
 // Helper: Authenticated fetch for admin endpoints
@@ -833,9 +834,10 @@ const PolicySettings = () => {
                 }
             });
             if (response.ok) {
-                const data = await response.json();
-                if (data && data.value && Array.isArray(data.value) && data.value.length > 0) {
-                    setPolicies(data.value);
+                const data: unknown = await response.json();
+                const savedPolicies = readLegalPolicies(data);
+                if (savedPolicies.length > 0) {
+                    setPolicies(savedPolicies);
                 } else {
                     // Si no existen políticas en la BD, inyectamos las plantillas por defecto (Inactivas)
                     const defaultTemplates: PolicyDocument[] = [
@@ -846,7 +848,6 @@ const PolicySettings = () => {
                     ];
                     setPolicies(defaultTemplates);
                     // Las guardamos silenciosamente para que la próxima vez existan
-                    saveToBackend(defaultTemplates).catch(e => console.error("Error inicializando plantillas:", e));
                 }
             } else {
                 throw new Error('Error al cargar políticas');
@@ -868,10 +869,7 @@ const PolicySettings = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
                 },
-                body: JSON.stringify({
-                    group_key: 'legal_policies',
-                    settings: newPolicies
-                })
+                body: JSON.stringify(buildLegalPoliciesSettingsRequest(newPolicies))
             });
 
             if (!response.ok) {
