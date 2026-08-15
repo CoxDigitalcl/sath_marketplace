@@ -63,6 +63,28 @@ test('homepage role videos remain opt-in, lightweight and text-explained', () =>
     assert.match(homepage, /subtítulos visibles en español/);
 });
 
+test('above-the-fold hero text is visible before hydration', () => {
+    const homepage = readSource('src', 'components', 'HomePage.tsx');
+    const heroStart = homepage.indexOf('{/* Text Content */}');
+    const heroEnd = homepage.indexOf('{/* Interactive Video Component */}');
+    const heroText = homepage.slice(heroStart, heroEnd);
+
+    assert.doesNotMatch(heroText, /initial=(?:"initial"|\{\{\s*opacity:\s*0)/);
+});
+
+test('video cache policy reaches both Express and LiteSpeed static delivery', () => {
+    const seoFrontend = readSource('server', 'middleware', 'seoFrontend.js');
+    const publicPolicy = readSource('public', 'videos', '.htaccess');
+    const deployedPolicy = readSource('dist', 'videos', '.htaccess');
+
+    assert.match(seoFrontend, /VIDEO_EXTENSIONS = new Set\(\['\.mp4', '\.webm', '\.ogg'\]\)/);
+    assert.match(seoFrontend, /VIDEO_CACHE_CONTROL = 'public, max-age=86400'/);
+    for (const policy of [publicPolicy, deployedPolicy]) {
+        assert.match(policy, /FilesMatch "\\\.\(mp4\|webm\|ogg\)\$"/);
+        assert.match(policy, /Header set Cache-Control "public, max-age=86400"/);
+    }
+});
+
 test('direct public images reserve layout space and declare asynchronous decoding', () => {
     const sourceFiles = [
         ['src', 'components', 'HomePage.tsx'],

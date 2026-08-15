@@ -15,6 +15,9 @@ dist/*
 !dist/images/
 dist/images/*
 !dist/images/logo-sath-26.png
+!dist/videos/
+dist/videos/*
+!dist/videos/.htaccess
 dist-ssr
 *.local
 

@@ -165,23 +165,14 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                     <div className="flex flex-col lg:flex-row items-center gap-12">
                         {/* Text Content */}
                         <div className="lg:w-1/2 text-center lg:text-left">
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5 }}
-                            >
+                            <div>
                                 <span className="inline-block py-1 px-3 rounded-full bg-brand-primary/10 text-brand-primary text-sm font-semibold mb-4">
                                     #1 Marketplace de Servicios en Chile
                                 </span>
-                                <motion.h1
-                                    className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 leading-tight"
-                                    variants={fadeInUp}
-                                    initial="initial"
-                                    animate="animate"
-                                >
+                                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 leading-tight">
                                     Encuentra al experto <br />
                                     <span className="text-brand-primary">perfecto para ti</span>
-                                </motion.h1>
+                                </h1>
                                 <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto lg:mx-0">
                                     Desde reparaciones del hogar hasta clases particulares. Conecta con profesionales verificados y paga de forma segura con nuestra garantía de satisfacción.
                                 </p>
@@ -224,7 +215,7 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                     <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Pago Seguro</span>
                                     <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Sin Comisiones Ocultas</span>
                                 </div>
-                            </motion.div>
+                            </div>
                         </div>
 
                         {/* Interactive Video Component */}

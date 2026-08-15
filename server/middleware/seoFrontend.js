@@ -20,6 +20,8 @@ import {
 import { injectPublicSsr } from '../ssr/entryServer.js';
 
 const NOINDEX = 'noindex, nofollow, noarchive';
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.ogg']);
+const VIDEO_CACHE_CONTROL = 'public, max-age=86400';
 
 export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
     if (!buildPath && typeof indexHtml !== 'string') {
@@ -119,6 +121,8 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             setHeaders: (res, filePath) => {
                 if (path.extname(filePath).toLowerCase() === '.html') {
                     res.setHeader('Cache-Control', SEO_CACHE_HEADERS.html);
+                } else if (VIDEO_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+                    res.setHeader('Cache-Control', VIDEO_CACHE_CONTROL);
                 }
             }
         }));

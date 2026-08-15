@@ -34,6 +34,22 @@ Los presupuestos de archivos son controles preventivos; no sustituyen mediciones
 
 La evidencia de campo debe obtenerse con PageSpeed Insights/CrUX y Search Console cuando exista tráfico suficiente. Una medición de laboratorio aislada no se presenta como resultado de campo.
 
+### Línea base móvil de cierre
+
+El 15 de agosto de 2026 se ejecutaron tres corridas Lighthouse 12.8.2, perfil móvil y throttling simulado, contra la portada de producción. La API oficial de PageSpeed respondió HTTP 429, por lo que estos valores son exclusivamente de laboratorio:
+
+| Métrica | Mediana |
+| --- | ---: |
+| Performance | 84/100 |
+| FCP | 2,31 s |
+| LCP | 2,86 s |
+| Speed Index | 3,73 s |
+| TBT | 275 ms |
+| CLS | 0 |
+| Respuesta del documento | 175 ms |
+
+Lighthouse atribuyó la brecha de LCP al retraso de renderizado del texto principal, que estaba oculto por animaciones hasta la hidratación. El cierre 5C elimina esas animaciones únicamente del texto crítico del hero; la comprobación posterior al despliegue debe confirmar el efecto. No existe todavía evidencia CrUX suficiente para informar INP de campo.
+
 ## Reglas de implementación
 
 - Las rutas públicas se cargan por demanda con `React.lazy`.
@@ -41,6 +57,7 @@ La evidencia de campo debe obtenerse con PageSpeed Insights/CrUX y Search Consol
 - Las imágenes declaran ancho, alto y decodificación; las que no son críticas usan carga diferida.
 - Los videos del inicio no se reproducen automáticamente, usan `preload="none"`, poster y descripción textual.
 - Los videos optimizados permanecen bajo control de versiones para que el deploy de cPanel sea reproducible.
+- Los videos se entregan con caché pública de 24 horas tanto desde Express como desde la capa estática LiteSpeed. No se usa `immutable` porque sus nombres actuales no contienen hash de contenido.
 - Servicios y proveedores usan un único slug canónico; las variantes antiguas o incorrectas responden con redirección permanente 308.
 - Cualquier aumento de presupuesto requiere una decisión explícita y evidencia de que no se puede resolver con división de código, compresión o eliminación de dependencias.
 
@@ -52,4 +69,5 @@ Después del pull/build/reinicio en cPanel:
 2. Confirmar respuesta 308 desde la URL histórica basada sólo en UUID.
 3. Confirmar que `sitemap.xml` contiene únicamente las rutas con slug canónico.
 4. Confirmar que los dos videos cargan bajo demanda y conservan poster, controles y subtítulos integrados.
-5. Ejecutar una medición móvil de laboratorio y registrar cualquier brecha antes de aumentar presupuestos.
+5. Confirmar que los videos responden con `Cache-Control: public, max-age=86400`.
+6. Ejecutar una medición móvil de laboratorio y registrar cualquier brecha antes de aumentar presupuestos.
