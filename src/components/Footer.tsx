@@ -1,14 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Page } from '../types';
+import { Link } from 'react-router-dom';
 import { LogoIcon } from './IconComponents';
 import { Facebook, Instagram, Linkedin, Twitter, Share2, Heart } from 'lucide-react';
 
-interface FooterProps {
-  navigateTo: (page: Page, params?: any) => void;
-}
-
-const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
+const Footer: React.FC = () => {
   const [socialLinks, setSocialLinks] = useState<any>({});
 
   useEffect(() => {
@@ -50,29 +46,29 @@ const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
           <div>
             <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase mb-5">Explorar</h3>
             <ul className="space-y-3">
-              <li><button onClick={() => navigateTo('category-detail', { id: 'hogar', name: 'Hogar y Mantención' })} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Hogar y Mantención</button></li>
-              <li><button onClick={() => navigateTo('category-detail', { id: 'salud', name: 'Salud y Bienestar' })} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Salud y Bienestar</button></li>
-              <li><button onClick={() => navigateTo('category-detail', { id: 'clases', name: 'Clases y Tutorías' })} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Clases y Tutorías</button></li>
-              <li><button onClick={() => navigateTo('categories')} className="text-sm text-brand-primary hover:text-brand-light font-medium transition-colors text-left mt-2 block">Ver todas las categorías &rarr;</button></li>
+              <li><Link to="/categories/hogar" className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Hogar y Mantención</Link></li>
+              <li><Link to="/categories/salud" className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Salud y Bienestar</Link></li>
+              <li><Link to="/categories/clases" className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left flex items-center group"><span className="w-0 h-px bg-brand-light transition-all duration-300 group-hover:w-2 mr-0 group-hover:mr-2"></span>Clases y Tutorías</Link></li>
+              <li><Link to="/categories" className="text-sm text-brand-primary hover:text-brand-light font-medium transition-colors text-left mt-2 block">Ver todas las categorías &rarr;</Link></li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase mb-5">Soporte</h3>
             <ul className="space-y-3">
-              <li><button onClick={() => navigateTo('contact')} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Centro de Ayuda</button></li>
-              <li><button onClick={() => navigateTo('contact')} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Contacto</button></li>
-              <li><button onClick={() => navigateTo('provider-register')} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Quiero ser Proveedor</button></li>
+              <li><span className="text-sm text-gray-500">Centro de Ayuda (próximamente)</span></li>
+              <li><a href="mailto:soporte@serviciosatuhogar.cl" className="text-sm text-gray-400 hover:text-brand-light transition-colors">Contacto</a></li>
+              <li><Link to="/provider/register" className="text-sm text-gray-400 hover:text-brand-light transition-colors">Quiero ser Proveedor</Link></li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase mb-5">Legal & Empresa</h3>
             <ul className="space-y-3">
-              <li><button onClick={() => navigateTo('about')} className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Sobre Nosotros</button></li>
-              <li><button className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Términos y Condiciones</button></li>
-              <li><button className="text-sm text-gray-400 hover:text-brand-light transition-colors text-left">Política de Privacidad</button></li>
-              <li className="pt-4"><button onClick={() => navigateTo('admin-dashboard')} className="text-xs text-gray-600 hover:text-brand-primary text-left transition-colors">Acceso Administrativo</button></li>
+              <li><span className="text-sm text-gray-500">Sobre Nosotros (próximamente)</span></li>
+              <li><Link to="/legal/terminos-y-condiciones-de-uso" className="text-sm text-gray-400 hover:text-brand-light transition-colors">Términos y Condiciones</Link></li>
+              <li><Link to="/legal/politica-de-privacidad" className="text-sm text-gray-400 hover:text-brand-light transition-colors">Política de Privacidad</Link></li>
+              <li className="pt-4"><Link to="/admin" className="text-xs text-gray-600 hover:text-brand-primary transition-colors">Acceso Administrativo</Link></li>
             </ul>
           </div>
         </div>

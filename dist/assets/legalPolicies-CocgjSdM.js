@@ -1,0 +1,1 @@
+const l=s=>s!==null&&typeof s=="object"&&!Array.isArray(s)?s:null,c=s=>{const i=l(s);if(!i)return[];const e=l(i.data),r=[e==null?void 0:e.legal_policies,e==null?void 0:e.value,i.legal_policies,i.value].find(Array.isArray);return Array.isArray(r)?r:[]},t=s=>({group:"legal_policies",settings:{legal_policies:s}});export{t as b,c as r};

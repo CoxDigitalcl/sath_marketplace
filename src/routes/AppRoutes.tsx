@@ -2,26 +2,27 @@ import React, { useEffect, useCallback } from 'react';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import HomePage from '../components/HomePage';
-import AuthPage from '../components/AuthPage';
-import ProviderRegistrationForm from '../components/ProviderRegistrationForm';
-import ClientRegistrationForm from '../components/ClientRegistrationForm';
-import LoginForm from '../components/LoginForm';
-import ForgotPasswordPage from '../components/ForgotPasswordPage';
-import ResetPasswordPage from '../components/ResetPasswordPage';
-import StyleGuidePage from '../components/StyleGuidePage';
-import SearchResultsPage from '../components/public/SearchResultsPage';
-import ServiceDetailPage from '../components/public/ServiceDetailPage';
-import ProviderPublicProfile from '../components/public/ProviderPublicProfile';
-import CheckoutPage from '../components/public/CheckoutPage';
-import CheckoutSuccessPage from '../components/public/CheckoutSuccessPage';
-import CategoriesHubPage from '../components/public/CategoriesHubPage';
-import CategoryDetailPage from '../components/public/CategoryDetailPage';
-import LegalPolicy from '../components/public/LegalPolicy';
-import WhatsAppWidget from '../components/common/WhatsAppWidget';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../stores/authStore';
+import { buildProviderPath, buildServicePath, extractPublicUuid } from '../../shared/publicPaths.js';
 
+const HomePage = React.lazy(() => import('../components/HomePage'));
+const AuthPage = React.lazy(() => import('../components/AuthPage'));
+const ProviderRegistrationForm = React.lazy(() => import('../components/ProviderRegistrationForm'));
+const ClientRegistrationForm = React.lazy(() => import('../components/ClientRegistrationForm'));
+const LoginForm = React.lazy(() => import('../components/LoginForm'));
+const ForgotPasswordPage = React.lazy(() => import('../components/ForgotPasswordPage'));
+const ResetPasswordPage = React.lazy(() => import('../components/ResetPasswordPage'));
+const StyleGuidePage = React.lazy(() => import('../components/StyleGuidePage'));
+const SearchResultsPage = React.lazy(() => import('../components/public/SearchResultsPage'));
+const ServiceDetailPage = React.lazy(() => import('../components/public/ServiceDetailPage'));
+const ProviderPublicProfile = React.lazy(() => import('../components/public/ProviderPublicProfile'));
+const CheckoutPage = React.lazy(() => import('../components/public/CheckoutPage'));
+const CheckoutSuccessPage = React.lazy(() => import('../components/public/CheckoutSuccessPage'));
+const CategoriesHubPage = React.lazy(() => import('../components/public/CategoriesHubPage'));
+const CategoryDetailPage = React.lazy(() => import('../components/public/CategoryDetailPage'));
+const LegalPolicy = React.lazy(() => import('../components/public/LegalPolicy'));
+const WhatsAppWidget = React.lazy(() => import('../components/common/WhatsAppWidget'));
 const AdminDashboard = React.lazy(() => import('../components/admin/AdminDashboard'));
 const ProviderDashboard = React.lazy(() => import('../components/provider/ProviderDashboard'));
 const ClientDashboard = React.lazy(() => import('../components/client/ClientDashboard'));
@@ -65,7 +66,7 @@ const StandardLayout: React.FC<{ children: React.ReactNode, navigateTo: (page: s
             <main className="flex-grow">
                 {children}
             </main>
-            <Footer navigateTo={navigateTo} />
+            <Footer />
             <WhatsAppWidget />
         </div>
     );
@@ -123,8 +124,8 @@ const AppRoutes: React.FC = () => {
                 navigate(`/categories/${params?.id}${qs ? `?${qs}` : ''}`, { state: params });
                 break;
             }
-            case 'service-detail': navigate(`/service/${params?.id}`, { state: params }); break;
-            case 'provider-profile': navigate(`/provider/${params?.id || params?.providerId}`, { state: params }); break;
+            case 'service-detail': navigate(buildServicePath(params?.id, params?.title || params?.name), { state: params }); break;
+            case 'provider-profile': navigate(buildProviderPath(params?.id || params?.providerId, params?.name || params?.providerName), { state: params }); break;
             case 'checkout': navigate('/checkout', { state: params }); break;
             case 'style-guide': navigate('/style-guide'); break;
             case 'admin-dashboard': navigate('/admin'); break;
@@ -150,7 +151,7 @@ const AppRoutes: React.FC = () => {
         <>
             <ScrollToTop />
             <React.Suspense fallback={(
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">Cargando área privada...</div>
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">Cargando...</div>
             )}>
               <Routes>
                 {/* Dashboards */}
@@ -170,9 +171,9 @@ const AppRoutes: React.FC = () => {
                 <Route path="/" element={<StandardLayout navigateTo={navigateToAdapter}><HomePage navigateTo={navigateToAdapter} setTheme={setTheme} /></StandardLayout>} />
                 <Route path="/search" element={<StandardLayout navigateTo={navigateToAdapter}><SearchResultsPage navigateTo={navigateToAdapter} /></StandardLayout>} />
                 <Route path="/categories" element={<StandardLayout navigateTo={navigateToAdapter}><CategoriesHubPage navigateTo={navigateToAdapter} /></StandardLayout>} />
-                <Route path="/categories/:id" element={<StandardLayout navigateTo={navigateToAdapter}><CategoryDetailPage navigateTo={navigateToAdapter} categoryId={location.pathname.split('/').pop()} categoryName={location.state?.name} /></StandardLayout>} />
-                <Route path="/service/:id" element={<StandardLayout navigateTo={navigateToAdapter}><ServiceDetailPage navigateTo={navigateToAdapter} serviceId={location.pathname.split('/').pop()} /></StandardLayout>} />
-                <Route path="/provider/:id" element={<StandardLayout navigateTo={navigateToAdapter}><ProviderPublicProfile navigateTo={navigateToAdapter} providerId={location.pathname.split('/').pop()} /></StandardLayout>} />
+                <Route path="/categories/:id" element={<StandardLayout navigateTo={navigateToAdapter}><CategoryDetailPage categoryId={location.pathname.split('/').pop()} categoryName={location.state?.name} /></StandardLayout>} />
+                <Route path="/service/:id" element={<StandardLayout navigateTo={navigateToAdapter}><ServiceDetailPage navigateTo={navigateToAdapter} serviceId={extractPublicUuid(location.pathname.split('/').pop())} /></StandardLayout>} />
+                <Route path="/provider/:id" element={<StandardLayout navigateTo={navigateToAdapter}><ProviderPublicProfile providerId={extractPublicUuid(location.pathname.split('/').pop())} /></StandardLayout>} />
                 <Route path="/checkout" element={<StandardLayout navigateTo={navigateToAdapter}><CheckoutPage navigateTo={navigateToAdapter} service={location.state?.service} booking={location.state?.booking} freightData={location.state?.freightData} /></StandardLayout>} />
                 <Route path="/checkout/success" element={<StandardLayout navigateTo={navigateToAdapter}><CheckoutSuccessPage navigateTo={navigateToAdapter} /></StandardLayout>} />
                 <Route path="/legal/:slug" element={<StandardLayout navigateTo={navigateToAdapter}><LegalPolicy /></StandardLayout>} />

@@ -47,6 +47,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
                 <iframe
                     src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=${autoPlay ? 1 : 0}&rel=0&origin=${origin}`}
                     title="YouTube video player"
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
                     className="w-full h-full absolute top-0 left-0 z-10"
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -68,6 +70,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
                 <iframe
                     src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${autoPlay ? 1 : 0}`}
                     title="Vimeo video player"
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
                     className="w-full h-full absolute top-0 left-0 z-10"
                     frameBorder="0"
                     allow="autoplay; fullscreen; picture-in-picture"
@@ -89,9 +93,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
                 <video
                     src={url}
                     controls
+                    preload="metadata"
                     className="w-full h-full object-contain absolute top-0 left-0 z-10"
                     poster={poster}
                     autoPlay={autoPlay}
+                    width="1280"
+                    height="720"
                     onError={() => {
                         console.error("VideoPlayer: Local video error");
                         setError(true);

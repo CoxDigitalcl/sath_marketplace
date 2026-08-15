@@ -1,14 +1,12 @@
 
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Page } from '../../types';
 import { ChevronLeft, Filter, ArrowRight, List } from 'lucide-react';
 import ServiceCard from '../ServiceCard';
 import LocationCoverageSelector from '../common/LocationCoverageSelector';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getCommunesForRegion, getRegionByCode } from '../../../shared/chileLocations.js';
 
 interface CategoryDetailPageProps {
-    navigateTo: (page: Page, params?: any) => void;
     categoryId?: string;
     categoryName?: string;
 }
@@ -118,7 +116,7 @@ const buildLocationSearch = (currentParams: URLSearchParams, regionCode: string,
     return params.toString();
 };
 
-const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, categoryId = 'hogar', categoryName }) => {
+const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ categoryId = 'hogar', categoryName }) => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const initialLocation = normalizeLocationFromParams(searchParams.get('region'), searchParams.get('commune'));
@@ -288,9 +286,9 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, cat
             {/* Category Header */}
             <div className="bg-white border-b border-gray-200">
                 <div className="container mx-auto px-4 py-8">
-                    <button onClick={() => navigateTo('categories')} className="flex items-center text-sm text-gray-500 hover:text-brand-primary mb-4 transition-colors">
+                    <Link to="/categories" className="flex items-center text-sm text-gray-500 hover:text-brand-primary mb-4 transition-colors">
                         <ChevronLeft size={16} className="mr-1" /> Volver a todas las categorías
-                    </button>
+                    </Link>
                     <div className="flex flex-col md:flex-row md:items-center justify-between">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">{resolvedCategoryName}</h1>
@@ -321,7 +319,7 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, cat
                     <div className="lg:col-span-1 order-2 lg:order-1">
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 sticky top-24">
                             <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-                                <List size={18} className="mr-2" /> Especialidades {selectedSubcategory && <span className="ml-2 text-xs font-normal text-brand-primary cursor-pointer hover:underline" onClick={() => setSelectedSubcategory(null)}>(Ver todas)</span>}
+                                <List size={18} className="mr-2" /> Especialidades {selectedSubcategory && <button type="button" className="ml-2 text-xs font-normal text-brand-primary hover:underline" onClick={() => setSelectedSubcategory(null)}>(Ver todas)</button>}
                             </h3>
                             {subcategories.length > 0 ? (
                                 <ul className="space-y-2 mb-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
@@ -354,12 +352,12 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, cat
                             </div>
 
                             <div className="border-t border-gray-200 pt-6">
-                                <button
-                                    onClick={() => navigateTo('categories')}
-                                    className="w-full py-2 border border-brand-secondary text-brand-secondary rounded-md font-medium hover:bg-brand-secondary hover:text-white transition-colors text-sm"
+                                <Link
+                                    to="/categories"
+                                    className="block w-full py-2 border border-brand-secondary text-center text-brand-secondary rounded-md font-medium hover:bg-brand-secondary hover:text-white transition-colors text-sm"
                                 >
                                     Ver otras categorías
-                                </button>
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -389,7 +387,6 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, cat
                                             ...service,
                                             isFavorite: favoriteIds.has(service.id)
                                         }}
-                                        onClick={() => navigateTo('service-detail', { id: service.id })}
                                         isSponsored={service.isSponsored}
                                     />
                                 </div>
@@ -400,7 +397,7 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ navigateTo, cat
                             <div className="text-center py-12">
                                 <h3 className="text-lg text-gray-600">No hay servicios disponibles en esta categoría por el momento.</h3>
                                 <p className="text-sm text-gray-500 mt-2">Prueba seleccionando otra especialidad de la lista.</p>
-                                <button onClick={() => navigateTo('categories')} className="mt-4 text-brand-primary font-medium">Explorar otras categorías</button>
+                                <Link to="/categories" className="mt-4 inline-block text-brand-primary font-medium">Explorar otras categorías</Link>
                             </div>
                         )}
 

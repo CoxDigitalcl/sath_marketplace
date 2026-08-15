@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Page } from '../../types';
 import { Search, ArrowRight } from 'lucide-react';
 import { 
@@ -37,13 +38,14 @@ const CategoriesHubPage: React.FC<CategoriesHubPageProps> = ({ navigateTo }) => 
     });
   };
 
-  const handleCategoryClick = (category: { id: string; name: string }) => {
-    navigateTo('category-detail', {
-      id: category.id,
-      name: category.name,
-      region: selectedRegionCode,
-      communes: selectedRegionCode ? selectedCommunes : [],
-    });
+  const getCategoryPath = (category: { id: string; name: string }) => {
+    const params = new URLSearchParams();
+    if (selectedRegionCode) params.set('region', selectedRegionCode);
+    if (selectedRegionCode && selectedCommunes.length > 0) {
+      params.set('commune', selectedCommunes.join(','));
+    }
+    const queryString = params.toString();
+    return `/categories/${category.id}${queryString ? `?${queryString}` : ''}`;
   };
 
   return (
@@ -107,13 +109,22 @@ const CategoriesHubPage: React.FC<CategoriesHubPageProps> = ({ navigateTo }) => 
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Categorías Destacadas</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {categories.filter(c => c.featured).map(category => (
-                        <div 
+                        <Link
                             key={category.id}
-                            onClick={() => handleCategoryClick(category)}
+                            to={getCategoryPath(category)}
+                            state={{ id: category.id, name: category.name }}
                             className="group relative h-64 rounded-xl overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                         >
                             <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors z-10"></div>
-                            <img src={category.image} alt={category.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            <img
+                                src={category.image}
+                                alt={category.name}
+                                loading="lazy"
+                                decoding="async"
+                                width={870}
+                                height={580}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
                             <div className="absolute bottom-0 left-0 p-6 z-20 text-white">
                                 <div className="flex items-center mb-2">
                                     <div className="p-2 bg-brand-primary rounded-full mr-3">
@@ -128,7 +139,7 @@ const CategoriesHubPage: React.FC<CategoriesHubPageProps> = ({ navigateTo }) => 
                                     Explorar <ArrowRight size={16} className="ml-1" />
                                 </span>
                             </div>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             </div>
@@ -138,9 +149,10 @@ const CategoriesHubPage: React.FC<CategoriesHubPageProps> = ({ navigateTo }) => 
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Otras Categorías</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {categories.filter(c => !c.featured).map(category => (
-                        <div 
+                        <Link
                             key={category.id}
-                            onClick={() => handleCategoryClick(category)}
+                            to={getCategoryPath(category)}
+                            state={{ id: category.id, name: category.name }}
                             className="bg-white p-6 rounded-lg border border-gray-200 hover:border-brand-primary hover:shadow-md transition-all cursor-pointer flex flex-col items-center text-center group"
                         >
                             <div className="h-12 w-12 rounded-full bg-brand-light flex items-center justify-center mb-3 group-hover:bg-brand-primary/10 transition-colors">
@@ -148,7 +160,7 @@ const CategoriesHubPage: React.FC<CategoriesHubPageProps> = ({ navigateTo }) => 
                             </div>
                             <h3 className="font-semibold text-gray-900 group-hover:text-brand-primary">{category.name}</h3>
                             <p className="text-xs text-gray-500 mt-1">{category.description}</p>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             </div>

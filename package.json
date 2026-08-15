@@ -10,9 +10,12 @@
     "test:coverage-location": "node --test server/tests/locationCoverage.test.js",
     "test:payment-integrity": "node --test server/tests/paykuPaymentIntegrity.test.js server/tests/paykuPaymentProcessor.test.js server/tests/paykuOutbox.test.js server/tests/paymentConfirmationEffects.test.js server/tests/paykuControllerWiring.test.js",
     "test": "node --test server/tests/*.test.js",
+    "test:serial": "node --test --test-concurrency=1 server/tests/*.test.js",
     "security:migrate-private-uploads": "node server/scripts/migrate_private_uploads.js",
     "security:migrate-sessions": "node server/scripts/run_session_security_migration.js",
-    "seo:close-stage5b-content": "node server/scripts/close_stage5b_content_gate.js"
+    "seo:close-stage5b-content": "node server/scripts/close_stage5b_content_gate.js",
+    "performance:budget": "node server/scripts/check_stage5c_performance_budget.js",
+    "verify:stage5c": "npm run build && npm run performance:budget && npm run test:serial"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

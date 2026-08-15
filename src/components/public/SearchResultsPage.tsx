@@ -594,7 +594,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ navigateTo }) => 
                                                     ...service,
                                                     isFavorite: favoriteIds.has(service.id)
                                                 }}
-                                                onClick={() => navigateTo('service-detail', { id: service.id })}
                                                 isSponsored={service.isSponsored}
                                             />
                                         </div>

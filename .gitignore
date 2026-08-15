@@ -37,6 +37,8 @@ coverage
 /private_uploads/
 /tmp/
 /public/videos/*.mp4
+!/public/videos/Video-clientes.mp4
+!/public/videos/Video-proveedores.mp4
 
 # Editor directories and files
 .vscode/*

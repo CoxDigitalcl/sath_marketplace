@@ -1,4 +1,5 @@
 import { isValidUuid } from '../utils/identifiers.js';
+import { buildProviderPath, buildServicePath } from '../../shared/publicPaths.js';
 
 export const PUBLIC_CATEGORIES = Object.freeze([
     Object.freeze({
@@ -276,7 +277,7 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
     const query = getQuery(db);
     const [servicesResult, providersResult, policies] = await Promise.all([
         query(`
-            SELECT s.id
+            SELECT s.id, s.title
             FROM services s
             JOIN provider_profiles pp ON pp.user_id = s.provider_id
             JOIN users u ON u.id = s.provider_id
@@ -288,7 +289,8 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
             LIMIT 20000
         `),
         query(`
-            SELECT pp.user_id AS id
+            SELECT pp.user_id AS id,
+                   COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS name
             FROM provider_profiles pp
             JOIN users u ON u.id = pp.user_id
             WHERE u.role = 'provider'
@@ -302,13 +304,11 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
 
     const paths = [
         ...servicesResult.rows
-            .map((row) => row.id)
-            .filter(isValidUuid)
-            .map((id) => `/service/${id}`),
+            .filter((row) => isValidUuid(row.id))
+            .map((row) => buildServicePath(row.id, row.title)),
         ...providersResult.rows
-            .map((row) => row.id)
-            .filter(isValidUuid)
-            .map((id) => `/provider/${id}`),
+            .filter((row) => isValidUuid(row.id))
+            .map((row) => buildProviderPath(row.id, row.name)),
         ...policies.map((policy) => `/legal/${policy.slug}`)
     ];
 

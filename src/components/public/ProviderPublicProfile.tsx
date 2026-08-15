@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Page } from '../../types';
+import { Link } from 'react-router-dom';
 import { MapPin, ShieldCheck, MessageCircle, Clock, Calendar, Mail, Phone, CheckCircle, Share2, X, Facebook, Twitter, Linkedin, Link as LinkIcon } from 'lucide-react';
 import { StarIcon } from '../IconComponents';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 import toast from 'react-hot-toast';
+import { buildServicePath } from '../../../shared/publicPaths.js';
 
 interface ProviderPublicProfileProps {
-    navigateTo: (page: Page, params?: any) => void;
     providerId?: string;
 }
 
-const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ navigateTo, providerId }) => {
+const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ providerId }) => {
     const [activeTab, setActiveTab] = useState<'services' | 'reviews' | 'about'>('services');
     const [providerData, setProviderData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -85,7 +85,15 @@ const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ navigateT
             {/* Hero Banner */}
             <div className="h-48 md:h-64 bg-gradient-to-r from-brand-primary to-orange-400 relative">
                 {providerData.banner_image_url && (
-                    <img src={providerData.banner_image_url} alt="Banner" className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50" />
+                    <img
+                        src={providerData.banner_image_url}
+                        alt={`Portada de ${providerData.name}`}
+                        loading="eager"
+                        decoding="async"
+                        width="1440"
+                        height="256"
+                        className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50"
+                    />
                 )}
                 <div className="absolute inset-0 bg-black/10"></div>
             </div>
@@ -98,7 +106,11 @@ const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ navigateT
                             <div className="flex-shrink-0 flex justify-center md:justify-start">
                                 <img
                                     src={providerData.profile_image_url || `https://i.pravatar.cc/150?u=${providerData.id}`}
-                                    alt="Profile"
+                                    alt={`Perfil de ${providerData.name}`}
+                                    loading="eager"
+                                    decoding="async"
+                                    width="320"
+                                    height="320"
                                     className="h-32 w-32 md:h-40 md:w-40 rounded-full border-4 border-white shadow-lg object-cover bg-white"
                                 />
                             </div>
@@ -261,10 +273,18 @@ const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ navigateT
                     {activeTab === 'services' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {providerData.services.length > 0 ? providerData.services.map((service: any) => (
-                                <div key={service.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigateTo('service-detail', { id: service.id })}>
+                                <Link key={service.id} to={buildServicePath(service.id, service.title)} className="group block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
                                     <div className="h-48 relative bg-gradient-to-br from-gray-100 to-gray-200">
                                         {service.image ? (
-                                            <img src={service.image} alt={service.title} className="w-full h-full object-cover" />
+                                            <img
+                                                src={service.image}
+                                                alt={service.title}
+                                                loading="lazy"
+                                                decoding="async"
+                                                width="640"
+                                                height="384"
+                                                className="w-full h-full object-cover"
+                                            />
                                         ) : (
                                             <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
                                                 <svg className="w-10 h-10 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -290,11 +310,11 @@ const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ navigateT
                                                 )}
                                             </div>
                                         </div>
-                                        <button className="mt-4 w-full py-2 bg-gray-50 text-brand-primary font-semibold rounded-md hover:bg-brand-primary hover:text-white transition-colors">
+                                        <span className="mt-4 block w-full py-2 bg-gray-50 text-center text-brand-primary font-semibold rounded-md group-hover:bg-brand-primary group-hover:text-white transition-colors">
                                             Ver Detalle
-                                        </button>
+                                        </span>
                                     </div>
-                                </div>
+                                </Link>
                             )) : (
                                 <div className="col-span-full py-12 text-center text-gray-500">Este proveedor aún no tiene servicios activos.</div>
                             )}

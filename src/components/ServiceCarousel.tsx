@@ -6,7 +6,6 @@ import ServiceCard from './ServiceCard';
 interface ServiceCarouselProps {
     services: any[];
     title?: string;
-    onServiceClick: (id: string) => void;
     autoPlayInterval?: number;
     showControls?: boolean;
 }
@@ -14,7 +13,6 @@ interface ServiceCarouselProps {
 const ServiceCarousel: React.FC<ServiceCarouselProps> = ({
     services,
     title,
-    onServiceClick,
     autoPlayInterval = 5000,
     showControls = true
 }) => {
@@ -91,7 +89,6 @@ const ServiceCarousel: React.FC<ServiceCarouselProps> = ({
                             <ServiceCard
                                 key={`${service.id}-${currentIndex}`} // Force re-render for clean enter animation if needed, or use service.id
                                 service={service}
-                                onClick={() => onServiceClick(service.id)}
                                 isSponsored={service.isSponsored}
                             />
                         ))}

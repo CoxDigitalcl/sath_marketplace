@@ -11,12 +11,17 @@ import {
     injectSeoMetadata,
     isKnownSpaRoute
 } from '../services/seoService.js';
+import { buildProviderPath, buildServicePath } from '../../shared/publicPaths.js';
 
 const SITE_ORIGIN = 'https://serviciosatuhogar.cl';
 const VERIFIED_PROVIDER_ID = '11111111-1111-4111-8111-111111111111';
 const MISSING_PROVIDER_ID = '22222222-2222-4222-8222-222222222222';
 const SERVICE_ID = '33333333-3333-4333-8333-333333333333';
 const MISSING_SERVICE_ID = '44444444-4444-4444-8444-444444444444';
+const SERVICE_TITLE = 'Gasfitería <urgente>';
+const PROVIDER_NAME = 'Ana <script>alert("x")</script>';
+const SERVICE_PATH = buildServicePath(SERVICE_ID, SERVICE_TITLE);
+const PROVIDER_PATH = buildProviderPath(VERIFIED_PROVIDER_ID, PROVIDER_NAME);
 const INDEX_HTML = `<!doctype html>
 <html lang="es">
 <head>
@@ -67,28 +72,28 @@ const fakeDb = {
                     rows: [{
                         id: SERVICE_ID,
                         provider_id: VERIFIED_PROVIDER_ID,
-                        title: 'Gasfitería <urgente>',
+                        title: SERVICE_TITLE,
                         description: 'Reparación segura de filtraciones y artefactos.',
                         price: 45000,
                         type: 'presencial',
-                        provider_name: 'Ana Servicios',
+                        provider_name: PROVIDER_NAME,
                         coverage_area: 'Santiago'
                     }]
                 };
             }
 
-            if (/SELECT\s+s\.id\s+FROM services s/.test(sql) && params.length === 0) {
+            if (/SELECT\s+s\.id,\s+s\.title\s+FROM services s/.test(sql) && params.length === 0) {
                 assert.match(sql, /s\.is_active = TRUE/);
                 assert.match(sql, /s\.moderation_status = 'approved'/);
                 assert.match(sql, /pp\.is_verified = TRUE/);
                 assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
-                return { rows: [{ id: SERVICE_ID }, { id: 'not-a-uuid' }] };
+                return { rows: [{ id: SERVICE_ID, title: SERVICE_TITLE }, { id: 'not-a-uuid', title: 'No publicar' }] };
             }
 
-            if (/SELECT\s+pp\.user_id AS id\s+FROM provider_profiles pp/.test(sql) && params.length === 0) {
+            if (/SELECT\s+pp\.user_id AS id,[\s\S]+AS name\s+FROM provider_profiles pp/.test(sql) && params.length === 0) {
                 assert.match(sql, /pp\.is_verified = TRUE/);
                 assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
-                return { rows: [{ id: VERIFIED_PROVIDER_ID }, { id: 'not-a-uuid' }] };
+                return { rows: [{ id: VERIFIED_PROVIDER_ID, name: PROVIDER_NAME }, { id: 'not-a-uuid', name: 'No publicar' }] };
             }
 
             if (/FROM services s/.test(sql) && params.length === 1) {
@@ -101,12 +106,12 @@ const fakeDb = {
                     rows: [{
                         id: SERVICE_ID,
                         provider_id: VERIFIED_PROVIDER_ID,
-                        title: 'Gasfitería <urgente>',
+                        title: SERVICE_TITLE,
                         description: 'Reparación segura de filtraciones y artefactos.',
                         price: 45000,
                         type: 'presencial',
                         image_urls: ['/uploads/service-photo.webp'],
-                        provider_name: 'Ana Servicios',
+                        provider_name: PROVIDER_NAME,
                         coverage_area: 'Santiago',
                         coverage_region_name: 'Región Metropolitana'
                     }]
@@ -121,7 +126,7 @@ const fakeDb = {
                 return {
                     rows: [{
                         id: VERIFIED_PROVIDER_ID,
-                        name: 'Ana <script>alert("x")</script>',
+                        name: PROVIDER_NAME,
                         bio: 'Profesional verificada\ncon experiencia.',
                         profile_image_url: '/uploads/provider-photo.webp',
                         coverage_area: 'Santiago',
@@ -159,6 +164,7 @@ test('known SPA route classifier rejects arbitrary and malformed detail paths', 
     assert.equal(isKnownSpaRoute('/'), true);
     assert.equal(isKnownSpaRoute('/categories/hogar'), true);
     assert.equal(isKnownSpaRoute(`/service/${SERVICE_ID}`), true);
+    assert.equal(isKnownSpaRoute(SERVICE_PATH), true);
     assert.equal(isKnownSpaRoute('/provider/not-a-uuid'), false);
     assert.equal(isKnownSpaRoute('/admin/users'), false);
     assert.equal(isKnownSpaRoute('/invented-route'), false);
@@ -216,12 +222,33 @@ test('robots and dynamic sitemap return real resources with bounded caching', as
     const sitemap = await sitemapResponse.text();
     assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
     assert.match(sitemap, new RegExp(`/categories/hogar`));
-    assert.match(sitemap, new RegExp(`/service/${SERVICE_ID}`));
-    assert.match(sitemap, new RegExp(`/provider/${VERIFIED_PROVIDER_ID}`));
+    assert.match(sitemap, new RegExp(SERVICE_PATH));
+    assert.match(sitemap, new RegExp(PROVIDER_PATH));
     assert.match(sitemap, /\/legal\/politica-de-privacidad/);
     assert.equal(sitemap.includes('borrador-interno'), false);
     assert.equal(sitemap.includes('not-a-uuid'), false);
     assert.equal(sitemap.includes('/checkout'), false);
+});
+
+test('legacy identifiers and stale slugs redirect permanently to one canonical detail URL', async () => {
+    const cases = [
+        [`/service/${SERVICE_ID}`, SERVICE_PATH],
+        [`/service/slug-obsoleto-${SERVICE_ID}`, SERVICE_PATH],
+        [`/provider/${VERIFIED_PROVIDER_ID}`, PROVIDER_PATH],
+        [`/provider/slug-obsoleto-${VERIFIED_PROVIDER_ID}`, PROVIDER_PATH]
+    ];
+
+    for (const [legacyPath, canonicalPath] of cases) {
+        const response = await fetch(`${baseUrl}${legacyPath}`, { redirect: 'manual' });
+
+        assert.equal(response.status, 308, legacyPath);
+        assert.equal(response.headers.get('location'), `${SITE_ORIGIN}${canonicalPath}`, legacyPath);
+    }
+});
+
+test('canonical detail paths do not create redirect chains', async () => {
+    assert.equal((await fetch(`${baseUrl}${SERVICE_PATH}`, { redirect: 'manual' })).status, 200);
+    assert.equal((await fetch(`${baseUrl}${PROVIDER_PATH}`, { redirect: 'manual' })).status, 200);
 });
 
 test('public shell has canonical metadata and short-lived HTML caching', async () => {
@@ -235,7 +262,7 @@ test('public shell has canonical metadata and short-lived HTML caching', async (
     assert.match(html, /<meta name="description"/);
     assert.match(html, /data-public-ssr="true"/);
     assert.match(html, /<h1[^>]*>Encuentra servicios confiables para tu hogar en Chile<\/h1>/);
-    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
+    assert.match(html, new RegExp(`href="${SERVICE_PATH}"`));
     assert.match(html, /window\.__PUBLIC_SSR__=/);
     assert.equal(html.includes('<div id="root"></div>'), false);
 });
@@ -286,11 +313,11 @@ test('curated categories receive unique public metadata', async () => {
     assert.match(html, /<title>Hogar y Mantención \| Servicios a tu Hogar<\/title>/);
     assert.match(html, /rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/categories\/hogar"/);
     assert.match(html, /<h1[^>]*>Hogar y Mantención<\/h1>/);
-    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
+    assert.match(html, new RegExp(`href="${SERVICE_PATH}"`));
 });
 
 test('service metadata is emitted only for an approved public service', async () => {
-    const response = await fetch(`${baseUrl}/service/${SERVICE_ID}`);
+    const response = await fetch(`${baseUrl}${SERVICE_PATH}`);
     const html = await response.text();
 
     assert.equal(response.status, 200);
@@ -300,11 +327,11 @@ test('service metadata is emitted only for an approved public service', async ()
     assert.match(html, /<h1[^>]*>Gasfitería &lt;urgente&gt;<\/h1>/);
     assert.match(html, /Reparación segura de filtraciones y artefactos\./);
     assert.match(html, /\$45\.000/);
-    assert.match(html, new RegExp(`href="/provider/${VERIFIED_PROVIDER_ID}"`));
+    assert.match(html, new RegExp(`href="${PROVIDER_PATH}"`));
 });
 
 test('provider metadata is emitted only for a verified, unblocked provider', async () => {
-    const response = await fetch(`${baseUrl}/provider/${VERIFIED_PROVIDER_ID}`);
+    const response = await fetch(`${baseUrl}${PROVIDER_PATH}`);
     const html = await response.text();
 
     assert.equal(response.status, 200);
@@ -312,7 +339,7 @@ test('provider metadata is emitted only for a verified, unblocked provider', asy
     assert.match(html, /Ana &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
     assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/provider-photo\.webp/);
     assert.match(html, /data-route-id="provider"/);
-    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
+    assert.match(html, new RegExp(`href="${SERVICE_PATH}"`));
 });
 
 test('only active public legal policies receive canonical metadata', async () => {
@@ -328,7 +355,7 @@ test('only active public legal policies receive canonical metadata', async () =>
 });
 
 test('crawler and browser receive equivalent server-rendered public content', async () => {
-    const pathname = `/service/${SERVICE_ID}`;
+    const pathname = SERVICE_PATH;
     const browserResponse = await fetch(`${baseUrl}${pathname}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' }
     });

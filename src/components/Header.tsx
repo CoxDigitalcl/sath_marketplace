@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Page } from '../types';
 import { LogoIcon, SearchIcon } from './IconComponents';
 import { useAuthStore } from '../stores/authStore';
@@ -57,11 +58,7 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
     }
   };
 
-  const handleDashboardClick = () => {
-    if (user?.role === 'admin') navigateTo('admin-dashboard');
-    else if (user?.role === 'provider') navigateTo('provider-dashboard');
-    else navigateTo('client-dashboard');
-  };
+  const dashboardPath = user?.role === 'admin' ? '/admin' : user?.role === 'provider' ? '/provider/dashboard' : '/client/dashboard';
 
   return (
     <>
@@ -71,14 +68,14 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
 
           {/* Logo */}
           <div className="flex-shrink-0">
-            <button onClick={() => navigateTo('home')} className="flex items-center space-x-2 group">
+            <Link to="/" className="flex items-center space-x-2 group">
               <div className="transform transition-transform group-hover:scale-105 duration-300">
                 <LogoIcon className="h-9 w-9 text-brand-primary" />
               </div>
               <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-dark to-brand-primary hidden sm:block">
                 Serviciosatuhogar
               </span>
-            </button>
+            </Link>
           </div>
 
           {/* Search Bar (Visible on medium screens and up) */}
@@ -126,20 +123,18 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
           {/* Navigation Links */}
           <div className="hidden lg:flex lg:items-center lg:space-x-8">
             <nav className="flex items-center space-x-6">
-              <button
-                onClick={() => navigateTo('search')}
+              <Link to="/search"
                 className="text-gray-600 hover:text-brand-primary font-medium transition-colors duration-200 text-[15px] relative group"
               >
                 Explorar
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-primary transition-all duration-300 group-hover:w-full"></span>
-              </button>
-              <button
-                onClick={() => navigateTo('categories')}
+              </Link>
+              <Link to="/categories"
                 className="text-gray-600 hover:text-brand-primary font-medium transition-colors duration-200 text-[15px] relative group"
               >
                 Categorías
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-primary transition-all duration-300 group-hover:w-full"></span>
-              </button>
+              </Link>
             </nav>
 
             <div className="h-6 w-px bg-gray-200"></div>
@@ -168,13 +163,12 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
                   </div>
 
                   <div className="py-1">
-                    <button
-                      onClick={() => { setUserMenuOpen(false); handleDashboardClick(); }}
+                    <Link to={dashboardPath} onClick={() => setUserMenuOpen(false)}
                       className="flex items-center space-x-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-brand-primary transition-colors"
                     >
                       <LayoutDashboard size={18} />
                       <span>Mi Panel</span>
-                    </button>
+                    </Link>
                     {/* Add Profile link later if needed */}
                   </div>
 
@@ -191,18 +185,16 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
               </div>
             ) : (
               <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => navigateTo('provider-register')}
+                <Link to="/provider/register"
                   className="text-gray-600 hover:text-brand-primary font-medium transition-colors duration-300 text-[15px]"
                 >
                   Quiero ser proveedor
-                </button>
-                <button
-                  onClick={() => navigateTo('login')}
+                </Link>
+                <Link to="/login"
                   className="bg-brand-primary hover:bg-brand-accent text-white font-semibold py-2.5 px-6 rounded-full transition-all duration-300 transform hover:shadow-lg hover:-translate-y-0.5 text-[15px]"
                 >
                   Iniciar Sesión
-                </button>
+                </Link>
               </div>
             )}
           </div>
@@ -286,20 +278,16 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
 
                 {/* Navigation Links with Micro-animations */}
                 <div className="flex flex-col space-y-2 flex-grow">
-                   <motion.button
-                      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-                      onClick={() => { navigateTo('search'); setIsMobileMenuOpen(false); }}
+                   <Link to="/search" onClick={() => setIsMobileMenuOpen(false)}
                       className="text-left text-lg font-semibold text-gray-700 hover:text-brand-primary py-3 px-2 rounded-lg hover:bg-brand-primary/5 transition-colors"
                     >
                       Explorar
-                    </motion.button>
-                    <motion.button
-                      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-                      onClick={() => { navigateTo('categories'); setIsMobileMenuOpen(false); }}
+                    </Link>
+                    <Link to="/categories" onClick={() => setIsMobileMenuOpen(false)}
                       className="text-left text-lg font-semibold text-gray-700 hover:text-brand-primary py-3 px-2 rounded-lg hover:bg-brand-primary/5 transition-colors"
                     >
                        Categorías
-                    </motion.button>
+                    </Link>
                 </div>
 
                 {/* Footer and Session Actions */}
@@ -315,13 +303,11 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
                              <p className="text-xs text-brand-primary font-medium capitalize">{user?.role === 'admin' ? 'Administrador' : user?.role === 'provider' ? 'Proveedor' : 'Cliente'}</p>
                            </div>
                         </div>
-                        <motion.button
-                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                          onClick={() => { handleDashboardClick(); setIsMobileMenuOpen(false); }}
+                        <Link to={dashboardPath} onClick={() => setIsMobileMenuOpen(false)}
                           className="flex items-center space-x-3 text-gray-700 py-3 px-2 rounded-lg hover:bg-gray-50 hover:text-brand-primary font-medium transition-colors"
                         >
                           <LayoutDashboard size={20} className="text-gray-400" /> <span>Mi Panel</span>
-                        </motion.button>
+                        </Link>
                         <motion.button
                           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
                           onClick={() => { logout(); navigateTo('home'); setIsMobileMenuOpen(false); }}
@@ -332,20 +318,16 @@ const Header: React.FC<HeaderProps> = ({ navigateTo }) => {
                      </div>
                   ) : (
                      <div className="flex flex-col space-y-3">
-                        <motion.button
-                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                          onClick={() => { navigateTo('login'); setIsMobileMenuOpen(false); }}
+                        <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}
                           className="w-full bg-brand-primary hover:bg-brand-accent text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-95 text-center flex items-center justify-center space-x-2"
                         >
                           <User size={18} /><span>Iniciar Sesión</span>
-                        </motion.button>
-                        <motion.button
-                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-                          onClick={() => { navigateTo('provider-register'); setIsMobileMenuOpen(false); }}
+                        </Link>
+                        <Link to="/provider/register" onClick={() => setIsMobileMenuOpen(false)}
                           className="w-full bg-orange-50 text-orange-600 font-bold py-3.5 rounded-xl transition-all hover:bg-orange-100 active:scale-95 text-center"
                         >
                           Quiero ser proveedor
-                        </motion.button>
+                        </Link>
                      </div>
                   )}
                 </div>

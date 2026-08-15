@@ -147,6 +147,11 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
                 return sendSpaShell(req, res, { status: 404, forceNoindex: true });
             }
 
+            if (document.redirectTo && [301, 308].includes(document.status)) {
+                res.set('Cache-Control', SEO_CACHE_HEADERS.discovery);
+                return res.redirect(document.status, new URL(document.redirectTo, siteOrigin).toString());
+            }
+
             return sendSpaShell(req, res, {
                 status: document.status,
                 overrides: document.seo,

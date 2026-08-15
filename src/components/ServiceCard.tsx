@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { StarIcon } from './IconComponents';
 import { Heart, ImageIcon, MapPin, Monitor } from 'lucide-react';
 import { api } from '../api/client';
+import { buildServicePath } from '../../shared/publicPaths.js';
 
 interface ServiceCardProps {
     service: any;
-    onClick: () => void;
     isSponsored?: boolean;
 }
 
-const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick, isSponsored }) => {
+const ServiceCard: React.FC<ServiceCardProps> = ({ service, isSponsored }) => {
     // Cover image priority: cover_image_url > image_urls[0] > null (placeholder)
     const coverImage = service.cover_image_url || service.coverImageUrl || service.image_urls?.[0] || service.imageUrl || null;
+    const servicePath = buildServicePath(service.id, service.title || service.name);
 
     // Rating can be null if no reviews
     const hasRating = service.rating !== null && service.rating !== undefined && service.rating !== '0' && service.rating !== 0;
@@ -46,19 +48,23 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick, isSponsored
     };
 
     return (
-        <motion.div
+        <motion.article
             layout
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`bg-white rounded-lg border overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col cursor-pointer ${isSponsored ? 'border-brand-primary/30 ring-1 ring-brand-primary/10' : 'border-gray-200'}`}
-            onClick={onClick}
+            className={`relative bg-white rounded-lg border overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col cursor-pointer ${isSponsored ? 'border-brand-primary/30 ring-1 ring-brand-primary/10' : 'border-gray-200'}`}
         >
+            <Link to={servicePath} aria-label={`Ver detalle de ${service.title || service.name}`} className="absolute inset-0 z-10 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2" />
             <div className="relative h-48 overflow-hidden flex-shrink-0">
                 {coverImage && !imgError ? (
                     <img
                         src={coverImage}
                         alt={service.title || service.name}
+                        loading="lazy"
+                        decoding="async"
+                        width={640}
+                        height={384}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         onError={() => setImgError(true)}
                     />
@@ -110,18 +116,15 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick, isSponsored
                         ${(typeof service.price === 'string' ? parseFloat(service.price) : (service.price || 0)).toLocaleString('es-CL')}
                         {service.priceUnit && <span className="text-xs text-gray-400 font-normal ml-1">{service.priceUnit}</span>}
                     </span>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onClick();
-                        }}
-                        className="text-sm font-medium text-gray-600 hover:text-brand-primary transition-colors"
+                    <Link
+                        to={servicePath}
+                        className="relative z-20 text-sm font-medium text-gray-600 hover:text-brand-primary transition-colors"
                     >
                         Ver detalle
-                    </button>
+                    </Link>
                 </div>
             </div>
-        </motion.div>
+        </motion.article>
     );
 };
 

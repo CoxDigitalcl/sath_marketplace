@@ -8,9 +8,15 @@ import {
     loadPublicServiceSeo
 } from './publicSeoData.js';
 import { getSiteOrigin } from './seoService.legacy.js';
+import {
+    buildProviderPath,
+    buildServicePath,
+    PUBLIC_SLUG_PATTERN_SOURCE,
+    PUBLIC_UUID_PATTERN_SOURCE
+} from '../../shared/publicPaths.js';
 
-const UUID_SEGMENT = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
-const CATEGORY_SEGMENT = '[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?';
+const PUBLIC_DETAIL_SEGMENT = `(?:(${PUBLIC_SLUG_PATTERN_SOURCE})-)?(${PUBLIC_UUID_PATTERN_SOURCE})`;
+const CATEGORY_SEGMENT = PUBLIC_SLUG_PATTERN_SOURCE;
 const DEFAULT_LOADER_TIMEOUT_MS = 2500;
 
 const normalizePathname = (pathname = '/') => {
@@ -77,11 +83,11 @@ const categoryItems = () => PUBLIC_CATEGORIES.map((category) => ({
 }));
 
 const toServiceItem = (service) => ({
-    href: `/service/${service.id}`,
+    href: buildServicePath(service.id, service.title),
     title: normalizeSingleLine(service.title) || 'Servicio',
     description: normalizeSingleLine(service.description).slice(0, 180),
     providerName: normalizeSingleLine(service.provider_name) || 'Proveedor verificado',
-    providerHref: service.provider_id ? `/provider/${service.provider_id}` : null,
+    providerHref: service.provider_id ? buildProviderPath(service.provider_id, service.provider_name) : null,
     priceLabel: formatPrice(service.price),
     scope: getScope(service)
 });
@@ -194,7 +200,7 @@ const publicDefinitions = [
         indexable: true,
         sitemap: true,
         staticSitemapPaths: [],
-        match: createMatcher(new RegExp(`^/service/(${UUID_SEGMENT})$`), ['id']),
+        match: createMatcher(new RegExp(`^/service/${PUBLIC_DETAIL_SEGMENT}$`), ['slug', 'id']),
         load: ({ db, params }) => loadPublicServiceSeo(db, params.id),
         build: ({ pathname, data }) => {
             const title = normalizeSingleLine(data.title) || 'Detalle del servicio';
@@ -202,9 +208,13 @@ const publicDefinitions = [
                 || `Revisa el detalle y la cobertura del servicio ofrecido por ${normalizeSingleLine(data.provider_name) || 'un proveedor verificado'}.`;
             const firstImage = data.cover_image_url || parseImageList(data.image_urls).find(Boolean);
             const providerName = normalizeSingleLine(data.provider_name) || 'Proveedor verificado';
+            const canonicalPath = buildServicePath(data.id, title);
+            if (pathname !== canonicalPath) {
+                return { status: 308, redirectTo: canonicalPath };
+            }
             return {
                 status: 200,
-                canonical: makeCanonical(pathname),
+                canonical: makeCanonical(canonicalPath),
                 seo: {
                     title: `${title} | Servicios a tu Hogar`,
                     description: description.slice(0, 160),
@@ -221,7 +231,7 @@ const publicDefinitions = [
                     serviceType: normalizeSingleLine(data.type),
                     provider: {
                         name: providerName,
-                        href: `/provider/${data.provider_id}`
+                        href: buildProviderPath(data.provider_id, providerName)
                     },
                     breadcrumbs: [
                         { href: '/', label: 'Inicio' },
@@ -239,14 +249,18 @@ const publicDefinitions = [
         indexable: true,
         sitemap: true,
         staticSitemapPaths: [],
-        match: createMatcher(new RegExp(`^/provider/(${UUID_SEGMENT})$`), ['id']),
+        match: createMatcher(new RegExp(`^/provider/${PUBLIC_DETAIL_SEGMENT}$`), ['slug', 'id']),
         load: ({ db, params }) => loadPublicProviderPage(db, params.id),
         build: ({ pathname, data }) => {
             const name = normalizeSingleLine(data.name) || 'Proveedor';
             const description = normalizeSingleLine(data.bio) || 'Conoce el perfil y los servicios de este profesional verificado.';
+            const canonicalPath = buildProviderPath(data.id, name);
+            if (pathname !== canonicalPath) {
+                return { status: 308, redirectTo: canonicalPath };
+            }
             return {
                 status: 200,
-                canonical: makeCanonical(pathname),
+                canonical: makeCanonical(canonicalPath),
                 seo: {
                     title: `${name} | Servicios a tu Hogar`,
                     description: description.slice(0, 160),
@@ -392,6 +406,10 @@ export const loadPublicRouteDocument = async ({ db, pathname }) => {
         params: resolved.params,
         pathname: resolved.pathname
     });
+
+    if (document.redirectTo) {
+        return { ...document, definition: resolved.definition };
+    }
 
     return {
         ...document,

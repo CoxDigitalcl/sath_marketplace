@@ -67,6 +67,17 @@ test('client entry hydrates SSR markup and retains CSR mounting for private rout
     assert.match(clientEntry, /hydrateRoot\(rootElement, application\)/);
     assert.match(clientEntry, /createRoot\(rootElement\)\.render\(application\)/);
     assert.match(clientEntry, /PublicSsrView/);
+    for (const modulePath of [
+        '../components/HomePage',
+        '../components/public/SearchResultsPage',
+        '../components/public/ServiceDetailPage',
+        '../components/public/ProviderPublicProfile',
+        '../components/public/CategoriesHubPage',
+        '../components/public/CategoryDetailPage',
+        '../components/public/LegalPolicy'
+    ]) {
+        assert.ok(routes.includes(`React.lazy(() => import('${modulePath}'))`), modulePath);
+    }
     assert.match(routes, /React\.lazy\(\(\) => import\('\.\.\/components\/admin\/AdminDashboard'\)\)/);
     assert.match(routes, /React\.lazy\(\(\) => import\('\.\.\/components\/provider\/ProviderDashboard'\)\)/);
     assert.match(routes, /React\.lazy\(\(\) => import\('\.\.\/components\/client\/ClientDashboard'\)\)/);

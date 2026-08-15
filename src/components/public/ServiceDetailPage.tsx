@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Page } from '../../types';
 import type { FreightVehicle, LogisticsPlan } from '../../types';
 import type { GeoSearchResult } from '../../services/geo/types';
@@ -11,6 +12,7 @@ import MediaLightbox, { MediaItem } from '../common/MediaLightbox';
 import FreightRouteMap from '../common/FreightRouteMap';
 import FreightLogisticsCalculator from '../common/FreightLogisticsCalculator';
 import toast from 'react-hot-toast';
+import { buildProviderPath } from '../../../shared/publicPaths.js';
 
 interface ServiceDetailPageProps {
     navigateTo: (page: Page, params?: any) => void;
@@ -347,9 +349,9 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
             {/* Breadcrumb / Back */}
             <div className="bg-white border-b border-gray-200">
                 <div className="container mx-auto px-4 py-3">
-                    <button onClick={() => navigateTo('search')} className="flex items-center text-sm text-gray-500 hover:text-gray-900">
+                    <Link to="/search" className="flex items-center text-sm text-gray-500 hover:text-gray-900">
                         Volver a resultados
-                    </button>
+                    </Link>
                 </div>
             </div>
 
@@ -372,7 +374,15 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                         poster={mainImageUrl}
                                     />
                                 ) : mainImageUrl ? (
-                                    <img src={mainImageUrl} alt={service.title} className="w-full h-full object-cover" />
+                                    <img
+                                        src={mainImageUrl}
+                                        alt={service.title}
+                                        decoding="async"
+                                        fetchPriority="high"
+                                        width="1280"
+                                        height="720"
+                                        className="w-full h-full object-cover"
+                                    />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                                         <ImageIcon size={48} className="text-gray-300" />
@@ -394,6 +404,10 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                                     <img
                                                         src={item.thumbnail || item.url}
                                                         alt={`Galería ${idx + 1}`}
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        width="160"
+                                                        height="160"
                                                         className="w-full h-full object-cover"
                                                     />
                                                 ) : (
@@ -443,9 +457,17 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
 
                         {/* Provider Info */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <div className="flex items-center justify-between cursor-pointer" onClick={() => navigateTo('provider-profile', { id: service.provider.id })}>
+                            <Link to={buildProviderPath(service.provider.id, service.provider.name)} className="flex items-center justify-between">
                                 <div className="flex items-center">
-                                    <img src={service.provider.avatar} alt={service.provider.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-100" />
+                                    <img
+                                        src={service.provider.avatar}
+                                        alt={service.provider.name}
+                                        loading="lazy"
+                                        decoding="async"
+                                        width="112"
+                                        height="112"
+                                        className="w-14 h-14 rounded-full object-cover border-2 border-gray-100"
+                                    />
                                     <div className="ml-4">
                                         <h3 className="text-lg font-bold text-gray-900 hover:underline">{service.provider.name}</h3>
                                         <p className="text-sm text-gray-500 flex items-center">
@@ -453,8 +475,8 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                         </p>
                                     </div>
                                 </div>
-                                <button className="text-brand-primary font-medium text-sm hover:bg-brand-primary/5 px-3 py-2 rounded-md transition-colors">Ver Perfil</button>
-                            </div>
+                                <span className="text-brand-primary font-medium text-sm hover:bg-brand-primary/5 px-3 py-2 rounded-md transition-colors">Ver Perfil</span>
+                            </Link>
                         </div>
 
                         {/* Description */}

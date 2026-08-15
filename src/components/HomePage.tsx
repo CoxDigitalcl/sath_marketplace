@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Page, ServiceCategory } from '../types';
 import ServiceCarousel from './ServiceCarousel';
 import { LockKeyhole, Fingerprint, Star as LucideStar, Lightbulb, Send, Clock, Play, ArrowRight, User, Briefcase, Sprout } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import {
     SearchIcon, WrenchScrewdriverIcon, AcademicCapIcon, HeartIcon,
@@ -50,7 +50,6 @@ const SecurityFeature: React.FC<{ icon: React.ComponentType<{ size: number, colo
 );
 
 const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
-    const navigate = useNavigate();
     const [activeFilter, setActiveFilter] = useState('recommended');
     const [activeRole, setActiveRole] = useState<'client' | 'provider'>('client');
     const [promotions, setPromotions] = useState<any[]>([]);
@@ -135,7 +134,7 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
         });
     };
 
-    const navigateToCategory = (category: ServiceCategory) => {
+    const getCategoryPath = (category: ServiceCategory) => {
         const params = new URLSearchParams();
         if (selectedRegionCode) params.set('region', selectedRegionCode);
         if (selectedRegionCode && selectedCommunes.length > 0) {
@@ -143,9 +142,7 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
         }
 
         const queryString = params.toString();
-        navigate(`/categories/${category.id}${queryString ? `?${queryString}` : ''}`, {
-            state: { id: category.id, name: category.name },
-        });
+        return `/categories/${category.id}${queryString ? `?${queryString}` : ''}`;
     };
 
     // Animation Variants
@@ -288,11 +285,14 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                             >
                                                 <video
                                                     src="/videos/Video-clientes.mp4"
-                                                    autoPlay
+                                                    poster="/videos/clientes-poster.webp"
+                                                    preload="none"
                                                     muted
-                                                    loop
                                                     playsInline
                                                     controls
+                                                    width={960}
+                                                    height={720}
+                                                    aria-label="Video con subtítulos integrados sobre cómo contratar un servicio"
                                                     className="w-full h-full object-cover"
                                                 />
                                             </motion.div>
@@ -304,11 +304,14 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                             >
                                                 <video
                                                     src="/videos/Video-proveedores.mp4"
-                                                    autoPlay
+                                                    poster="/videos/proveedores-poster.webp"
+                                                    preload="none"
                                                     muted
-                                                    loop
                                                     playsInline
                                                     controls
+                                                    width={960}
+                                                    height={720}
+                                                    aria-label="Video con subtítulos integrados sobre cómo ofrecer servicios"
                                                     className="w-full h-full object-cover"
                                                 />
                                             </motion.div>
@@ -324,6 +327,11 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                         </p>
                                     </div>
                                 </div>
+
+                                <details className="mt-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                                    <summary className="cursor-pointer font-semibold text-gray-800">Descripción textual del video</summary>
+                                    <p className="mt-2 leading-6">{activeRole === 'client' ? 'El video explica cómo buscar un servicio, coordinar la contratación y elegir una fecha para recibirlo. Incluye subtítulos visibles en español.' : 'El video explica cómo publicar servicios, organizar la agenda y utilizar la plataforma para conseguir nuevas contrataciones. Incluye subtítulos visibles en español.'}</p>
+                                </details>
                             </motion.div>
                         </div>
                     </div>
@@ -392,10 +400,10 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {mainCategories.map((category) => (
-                        <motion.div
+                        <Link
                             key={category.id}
-                            whileHover={{ y: -5 }}
-                            onClick={() => navigateToCategory(category)}
+                            to={getCategoryPath(category)}
+                            state={{ id: category.id, name: category.name }}
                             className="bg-white p-6 rounded-xl shadow-sm hover:shadow-lg hover:shadow-brand-primary/10 border border-gray-100 cursor-pointer flex flex-col items-center text-center transition-all duration-300 group relative overflow-hidden"
                         >
                             {/* Subtle hover background highlight */}
@@ -406,12 +414,10 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                             </div>
                             <h3 className="relative font-bold text-gray-900 text-lg group-hover:text-brand-primary transition-colors mb-2 z-10">{category.name}</h3>
                             <p className="relative text-xs text-gray-500 line-clamp-2 px-2 z-10">{category.description}</p>
-                        </motion.div>
+                        </Link>
                     ))}
                     {/* Static "Ver Todas" Card */}
-                    <motion.div
-                        whileHover={{ y: -5 }}
-                        onClick={() => navigateTo('categories')}
+                    <Link to="/categories"
                         className="bg-brand-light/40 p-6 rounded-xl border border-brand-primary/20 cursor-pointer flex flex-col items-center text-center justify-center group h-full relative overflow-hidden hover:bg-brand-light/70 transition-colors duration-300"
                     >
                         <div className="relative p-3 bg-white rounded-full mb-3 shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all duration-300">
@@ -419,7 +425,7 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                         </div>
                         <span className="relative font-bold text-brand-primary text-lg group-hover:underline z-10">Ver todas</span>
                         <p className="relative text-xs text-brand-primary/70 mt-1 z-10">Explora el catálogo completo</p>
-                    </motion.div>
+                    </Link>
                 </div>
             </section>
 
@@ -476,7 +482,6 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                 <ServiceCarousel
                                     title=""
                                     services={featuredServices.sponsored}
-                                    onServiceClick={(id) => navigateTo('service-detail', { id })}
                                     autoPlayInterval={5000}
                                 />
                             ) : (
@@ -494,7 +499,6 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                 <ServiceCarousel
                                     title=""
                                     services={featuredServices.bestSellers}
-                                    onServiceClick={(id) => navigateTo('service-detail', { id })}
                                     autoPlayInterval={5000}
                                 />
                             ) : (
@@ -511,7 +515,6 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                 <ServiceCarousel
                                     title=""
                                     services={featuredServices.staffPicks}
-                                    onServiceClick={(id) => navigateTo('service-detail', { id })}
                                     autoPlayInterval={5000}
                                 />
                             ) : (
@@ -528,7 +531,6 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                 <ServiceCarousel
                                     title=""
                                     services={featuredServices.newArrivals}
-                                    onServiceClick={(id) => navigateTo('service-detail', { id })}
                                     autoPlayInterval={5000}
                                 />
                             ) : (
@@ -542,12 +544,11 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
 
                     {/* Subtle View All Button */}
                     <div className="mt-8 text-right">
-                        <button
-                            onClick={() => navigateTo('search')}
+                        <Link to="/search"
                             className="inline-flex items-center text-sm font-medium text-brand-primary hover:text-brand-accent transition-colors group"
                         >
                             Explorar todos los servicios <ArrowRight size={16} className="ml-1 transform group-hover:translate-x-1 transition-transform" />
-                        </button>
+                        </Link>
                     </div>
                 </div>
             </section>
@@ -576,9 +577,17 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {promotions.length > 0 ? (
                             promotions.map((promo) => (
-                                <div key={promo.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col sm:flex-row gap-4 hover:border-brand-primary/50 transition-all cursor-pointer" onClick={() => navigateTo('service-detail')}>
+                                <article key={promo.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col sm:flex-row gap-4 hover:border-brand-primary/50 transition-all">
                                     <div className="w-full sm:w-48 h-48 sm:h-auto relative rounded-lg overflow-hidden flex-shrink-0">
-                                        <img src={promo.image_url || 'https://images.unsplash.com/photo-1520523839592-bd5ba5c39558?q=80&w=870&auto=format&fit=crop'} alt={promo.title} className="w-full h-full object-cover" />
+                                        <img
+                                            src={promo.image_url || 'https://images.unsplash.com/photo-1520523839592-bd5ba5c39558?q=80&w=870&auto=format&fit=crop'}
+                                            alt={promo.title}
+                                            loading="lazy"
+                                            decoding="async"
+                                            width={870}
+                                            height={580}
+                                            className="w-full h-full object-cover"
+                                        />
                                         <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
                                             {promo.discount_label || 'Oferta'}
                                         </div>
@@ -596,10 +605,10 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                                 <span className="text-sm text-gray-400 line-through mr-2">${(promo.original_price || 0).toLocaleString('es-CL')}</span>
                                                 <span className="text-xl font-bold text-red-600">${(promo.discounted_price || 0).toLocaleString('es-CL')}</span>
                                             </div>
-                                            <button className="text-sm font-semibold text-brand-primary hover:underline">Aprovechar</button>
+                                            <span className="text-sm font-semibold text-brand-primary">Oferta informativa</span>
                                         </div>
                                     </div>
-                                </div>
+                                </article>
                             ))
                         ) : (
                             <div className="col-span-full py-10 flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-gray-300 text-center">
@@ -692,21 +701,21 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                         <span>Herramientas de gestión gratuitas</span>
                                     </li>
                                 </ul>
-                                <button
-                                    onClick={() => {
-                                        setTheme('provider');
-                                        navigateTo('provider-register');
-                                    }}
+                                <Link to="/provider/register" onClick={() => setTheme('provider')}
                                     className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-orange-600/20 transform hover:-translate-y-1"
                                 >
                                     Comenzar ahora
-                                </button>
+                                </Link>
                             </div>
                             <div className="order-1 lg:order-2 relative">
                                 <div className="absolute -inset-4 bg-orange-500/20 rounded-full blur-3xl"></div>
                                 <img
                                     src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
                                     alt="Equipo de trabajo"
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={2070}
+                                    height={1380}
                                     className="relative rounded-xl shadow-2xl transform rotate-2 hover:rotate-0 transition-transform duration-500"
                                 />
                             </div>

@@ -447,7 +447,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
 
                                 <div className="flex gap-4 mb-6">
                                     {service.images && service.images[0] && (
-                                        <img src={service.images[0]} alt={service.title} className="w-24 h-24 rounded-md object-cover" />
+                                        <img
+                                            src={service.images[0]}
+                                            alt={service.title}
+                                            loading="lazy"
+                                            decoding="async"
+                                            width="192"
+                                            height="192"
+                                            className="w-24 h-24 rounded-md object-cover"
+                                        />
                                     )}
                                     <div>
                                         <h3 className="font-bold text-lg text-gray-900">{service.title}</h3>
