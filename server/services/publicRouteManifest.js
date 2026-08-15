@@ -279,8 +279,10 @@ const publicDefinitions = [
         load: ({ db, params }) => loadPublicPolicySeo(db, params.slug),
         build: ({ pathname, data }) => {
             const paragraphs = stripHtml(data.content);
-            const description = paragraphs.join(' ').slice(0, 160)
-                || `${data.title} de la plataforma Servicios a tu Hogar.`;
+            const policySummary = paragraphs.join(' ');
+            const description = policySummary
+                ? `${data.title}: ${policySummary}`.slice(0, 160)
+                : `${data.title} de la plataforma Servicios a tu Hogar.`;
             return {
                 status: 200,
                 canonical: makeCanonical(pathname),

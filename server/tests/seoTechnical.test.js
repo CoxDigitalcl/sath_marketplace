@@ -323,6 +323,7 @@ test('only active public legal policies receive canonical metadata', async () =>
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /Política &lt;segura&gt; de privacidad \| Servicios a tu Hogar/);
     assert.match(html, /tratamiento responsable de datos personales/);
+    assert.match(html, /de privacidad: Explica el tratamiento responsable de datos personales/);
     assert.match(html, /data-route-id="legal"/);
 });
 
