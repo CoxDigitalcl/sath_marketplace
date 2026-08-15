@@ -5,18 +5,23 @@ import App from './App';
 import ErrorLogProvider from './components/ErrorLogProvider';
 import PublicSsrView from '../shared/publicSsrView.js';
 
-declare global {
-  interface Window {
-    __PUBLIC_SSR__?: Record<string, unknown>;
-  }
-}
-
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Could not find root element to mount to');
 }
 
-const ssrPage = window.__PUBLIC_SSR__;
+const readPublicSsrPage = (): Record<string, unknown> | undefined => {
+  const stateElement = document.getElementById('public-ssr-state');
+  if (!stateElement?.textContent) return undefined;
+
+  try {
+    return JSON.parse(stateElement.textContent) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+};
+
+const ssrPage = readPublicSsrPage();
 
 const HydrationBootstrap: React.FC = () => {
   const [showApplication, setShowApplication] = useState(!ssrPage);

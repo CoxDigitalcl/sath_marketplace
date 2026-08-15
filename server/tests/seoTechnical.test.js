@@ -263,7 +263,8 @@ test('public shell has canonical metadata and short-lived HTML caching', async (
     assert.match(html, /data-public-ssr="true"/);
     assert.match(html, /<h1[^>]*>Encuentra servicios confiables para tu hogar en Chile<\/h1>/);
     assert.match(html, new RegExp(`href="${SERVICE_PATH}"`));
-    assert.match(html, /window\.__PUBLIC_SSR__=/);
+    assert.match(html, /<script id="public-ssr-state" type="application\/json">/);
+    assert.doesNotMatch(html, /window\.__PUBLIC_SSR__/);
     assert.equal(html.includes('<div id="root"></div>'), false);
 });
 

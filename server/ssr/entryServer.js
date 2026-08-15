@@ -5,7 +5,7 @@ import PublicSsrView from '../../shared/publicSsrView.js';
 
 const ROOT_PLACEHOLDER = /<div\s+id=["']root["']\s*><\/div>/i;
 
-const serializeForInlineScript = (value) => JSON.stringify(value)
+const serializeForHtmlDataBlock = (value) => JSON.stringify(value)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026')
@@ -14,7 +14,7 @@ const serializeForInlineScript = (value) => JSON.stringify(value)
 
 export const renderPublicPage = (page) => ({
     markup: renderToString(React.createElement(PublicSsrView, { page })),
-    stateScript: `<script>window.__PUBLIC_SSR__=${serializeForInlineScript(page)};</script>`
+    stateScript: `<script id="public-ssr-state" type="application/json">${serializeForHtmlDataBlock(page)}</script>`
 });
 
 export const injectPublicSsr = (html, page) => {

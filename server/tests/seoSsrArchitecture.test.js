@@ -53,7 +53,9 @@ test('server entry escapes markup and serialized state controlled by public reco
     const rendered = injectPublicSsr(html, page);
     assert.match(rendered, /data-public-ssr="true"/);
     assert.match(rendered, /&lt;\/script&gt;&lt;script&gt;alert/);
-    assert.match(rendered, /window\.__PUBLIC_SSR__=/);
+    assert.match(rendered, /<script id="public-ssr-state" type="application\/json">/);
+    assert.doesNotMatch(rendered, /window\.__PUBLIC_SSR__/);
+    assert.doesNotMatch(rendered, /<script>\s*window\./);
     assert.equal(rendered.includes('</script><script>alert("x")'), false);
     assert.match(rendered, /\\u003c\/script\\u003e/);
 });
@@ -63,7 +65,9 @@ test('client entry hydrates SSR markup and retains CSR mounting for private rout
     const routes = fs.readFileSync(path.join(projectRoot, 'src', 'routes', 'AppRoutes.tsx'), 'utf8');
 
     assert.match(clientEntry, /import \{ createRoot, hydrateRoot \} from 'react-dom\/client'/);
-    assert.match(clientEntry, /window\.__PUBLIC_SSR__/);
+    assert.match(clientEntry, /document\.getElementById\('public-ssr-state'\)/);
+    assert.match(clientEntry, /JSON\.parse\(stateElement\.textContent\)/);
+    assert.doesNotMatch(clientEntry, /window\.__PUBLIC_SSR__/);
     assert.match(clientEntry, /hydrateRoot\(rootElement, application\)/);
     assert.match(clientEntry, /createRoot\(rootElement\)\.render\(application\)/);
     assert.match(clientEntry, /PublicSsrView/);
