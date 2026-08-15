@@ -58,6 +58,25 @@ const fakeDb = {
                 };
             }
 
+            if (/ORDER BY s\.created_at DESC[\s\S]*LIMIT/.test(sql)) {
+                assert.match(sql, /s\.is_active = TRUE/);
+                assert.match(sql, /s\.moderation_status = 'approved'/);
+                assert.match(sql, /pp\.is_verified = TRUE/);
+                assert.match(sql, /COALESCE\(u\.is_blocked, FALSE\) = FALSE/);
+                return {
+                    rows: [{
+                        id: SERVICE_ID,
+                        provider_id: VERIFIED_PROVIDER_ID,
+                        title: 'Gasfitería <urgente>',
+                        description: 'Reparación segura de filtraciones y artefactos.',
+                        price: 45000,
+                        type: 'presencial',
+                        provider_name: 'Ana Servicios',
+                        coverage_area: 'Santiago'
+                    }]
+                };
+            }
+
             if (/SELECT\s+s\.id\s+FROM services s/.test(sql) && params.length === 0) {
                 assert.match(sql, /s\.is_active = TRUE/);
                 assert.match(sql, /s\.moderation_status = 'approved'/);
@@ -81,10 +100,15 @@ const fakeDb = {
                 return {
                     rows: [{
                         id: SERVICE_ID,
+                        provider_id: VERIFIED_PROVIDER_ID,
                         title: 'Gasfitería <urgente>',
                         description: 'Reparación segura de filtraciones y artefactos.',
+                        price: 45000,
+                        type: 'presencial',
                         image_urls: ['/uploads/service-photo.webp'],
-                        provider_name: 'Ana Servicios'
+                        provider_name: 'Ana Servicios',
+                        coverage_area: 'Santiago',
+                        coverage_region_name: 'Región Metropolitana'
                     }]
                 };
             }
@@ -96,9 +120,12 @@ const fakeDb = {
                 if (params[0] !== VERIFIED_PROVIDER_ID) return { rows: [] };
                 return {
                     rows: [{
+                        id: VERIFIED_PROVIDER_ID,
                         name: 'Ana <script>alert("x")</script>',
                         bio: 'Profesional verificada\ncon experiencia.',
-                        profile_image_url: '/uploads/provider-photo.webp'
+                        profile_image_url: '/uploads/provider-photo.webp',
+                        coverage_area: 'Santiago',
+                        coverage_region_name: 'Región Metropolitana'
                     }]
                 };
             }
@@ -206,6 +233,11 @@ test('public shell has canonical metadata and short-lived HTML caching', async (
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /<link rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/"/);
     assert.match(html, /<meta name="description"/);
+    assert.match(html, /data-public-ssr="true"/);
+    assert.match(html, /<h1[^>]*>Encuentra servicios confiables para tu hogar en Chile<\/h1>/);
+    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
+    assert.match(html, /window\.__PUBLIC_SSR__=/);
+    assert.equal(html.includes('<div id="root"></div>'), false);
 });
 
 test('private, transactional, search, and tokenized routes emit noindex headers', async () => {
@@ -253,6 +285,8 @@ test('curated categories receive unique public metadata', async () => {
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /<title>Hogar y Mantención \| Servicios a tu Hogar<\/title>/);
     assert.match(html, /rel="canonical" href="https:\/\/serviciosatuhogar\.cl\/categories\/hogar"/);
+    assert.match(html, /<h1[^>]*>Hogar y Mantención<\/h1>/);
+    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
 });
 
 test('service metadata is emitted only for an approved public service', async () => {
@@ -263,6 +297,10 @@ test('service metadata is emitted only for an approved public service', async ()
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /Gasfitería &lt;urgente&gt; \| Servicios a tu Hogar/);
     assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/service-photo\.webp/);
+    assert.match(html, /<h1[^>]*>Gasfitería &lt;urgente&gt;<\/h1>/);
+    assert.match(html, /Reparación segura de filtraciones y artefactos\./);
+    assert.match(html, /\$45\.000/);
+    assert.match(html, new RegExp(`href="/provider/${VERIFIED_PROVIDER_ID}"`));
 });
 
 test('provider metadata is emitted only for a verified, unblocked provider', async () => {
@@ -273,6 +311,8 @@ test('provider metadata is emitted only for a verified, unblocked provider', asy
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /Ana &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
     assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/provider-photo\.webp/);
+    assert.match(html, /data-route-id="provider"/);
+    assert.match(html, new RegExp(`href="/service/${SERVICE_ID}"`));
 });
 
 test('only active public legal policies receive canonical metadata', async () => {
@@ -283,4 +323,41 @@ test('only active public legal policies receive canonical metadata', async () =>
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /Política &lt;segura&gt; de privacidad \| Servicios a tu Hogar/);
     assert.match(html, /tratamiento responsable de datos personales/);
+    assert.match(html, /data-route-id="legal"/);
+});
+
+test('crawler and browser receive equivalent server-rendered public content', async () => {
+    const pathname = `/service/${SERVICE_ID}`;
+    const browserResponse = await fetch(`${baseUrl}${pathname}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const crawlerResponse = await fetch(`${baseUrl}${pathname}`, {
+        headers: { 'User-Agent': 'Googlebot/2.1' }
+    });
+
+    assert.equal(browserResponse.status, 200);
+    assert.equal(crawlerResponse.status, 200);
+    assert.equal(await crawlerResponse.text(), await browserResponse.text());
+});
+
+test('SSR loader errors return a controlled 503 instead of an empty 200 shell', async () => {
+    const failingApp = express();
+    failingApp.use(createSeoFrontendRouter({
+        db: { pool: { query: async () => { throw new Error('database unavailable'); } } },
+        indexHtml: INDEX_HTML
+    }));
+    const failingServer = await new Promise((resolve) => {
+        const instance = failingApp.listen(0, '127.0.0.1', () => resolve(instance));
+    });
+
+    try {
+        const response = await fetch(`http://127.0.0.1:${failingServer.address().port}/categories/hogar`);
+        const html = await response.text();
+        assert.equal(response.status, 503);
+        assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+        assert.equal(response.headers.get('retry-after'), '30');
+        assert.match(html, /No pudimos cargar esta página/);
+    } finally {
+        await new Promise((resolve, reject) => failingServer.close((error) => error ? reject(error) : resolve()));
+    }
 });

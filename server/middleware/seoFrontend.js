@@ -2,59 +2,24 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 
+import logger from '../config/logger.js';
 import {
     SEO_CACHE_HEADERS,
     buildRobotsTxt,
     buildSitemapXml,
     getRouteSeo,
     getSiteOrigin,
-    injectSeoMetadata,
-    isKnownSpaRoute
+    injectSeoMetadata
 } from '../services/seoService.js';
 import {
-    getPublicCategory,
-    loadPublicPolicySeo,
-    loadPublicProviderSeo,
-    loadPublicServiceSeo,
-    loadPublicSitemapPaths
-} from '../services/publicSeoData.js';
+    createSsrFailurePage,
+    loadPublicRouteDocument,
+    loadPublicSitemapPaths,
+    resolveApplicationRoute
+} from '../services/publicRouteManifest.js';
+import { injectPublicSsr } from '../ssr/entryServer.js';
 
 const NOINDEX = 'noindex, nofollow, noarchive';
-
-const normalizeSingleLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
-
-const stripHtml = (value) => normalizeSingleLine(
-    String(value ?? '')
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
-);
-
-const getSafeImageUrl = (candidate, siteOrigin) => {
-    if (!candidate) return undefined;
-
-    try {
-        const parsed = new URL(candidate, siteOrigin);
-        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : undefined;
-    } catch {
-        return undefined;
-    }
-};
-
-const getFirstImage = (value) => {
-    let images = value;
-    if (typeof images === 'string') {
-        try {
-            images = JSON.parse(images);
-        } catch {
-            images = [images];
-        }
-    }
-
-    if (!Array.isArray(images)) return undefined;
-    const first = images.find((candidate) => typeof candidate === 'string' && candidate.trim());
-    return first?.trim();
-};
 
 export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
     if (!buildPath && typeof indexHtml !== 'string') {
@@ -69,7 +34,12 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
         return fs.readFileSync(indexPath, 'utf8');
     };
 
-    const sendSpaShell = (req, res, { status = 200, overrides = {}, forceNoindex = false } = {}) => {
+    const sendSpaShell = (req, res, {
+        status = 200,
+        overrides = {},
+        forceNoindex = false,
+        ssrPage = null
+    } = {}) => {
         let html;
         try {
             html = loadIndexHtml();
@@ -84,15 +54,40 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             forceNoindex: forceNoindex || status >= 400
         });
 
+        try {
+            html = injectSeoMetadata(html, seo);
+            if (ssrPage) html = injectPublicSsr(html, ssrPage);
+        } catch (error) {
+            logger.error('Public SSR HTML rendering failed.', {
+                path: req.path,
+                correlationId: req.correlationId,
+                errorType: error?.name || 'Error'
+            });
+            return res.status(500)
+                .set('Cache-Control', SEO_CACHE_HEADERS.html)
+                .set('X-Robots-Tag', NOINDEX)
+                .type('html')
+                .send('Error rendering frontend');
+        }
+
         res.status(status);
         res.set('Cache-Control', SEO_CACHE_HEADERS.html);
         res.set('X-Robots-Tag', seo.robots);
-        return res.type('html').send(injectSeoMetadata(html, seo));
+        return res.type('html').send(html);
     };
 
-    const failLoader = (res, next, error) => {
-        res.set('X-Robots-Tag', NOINDEX);
-        return next(error);
+    const sendSsrFailure = (req, res) => {
+        res.set('Retry-After', '30');
+        return sendSpaShell(req, res, {
+            status: 503,
+            forceNoindex: true,
+            overrides: {
+                title: 'Contenido temporalmente no disponible | Servicios a tu Hogar',
+                description: 'El contenido público no está disponible temporalmente.',
+                canonical: null
+            },
+            ssrPage: createSsrFailurePage()
+        });
     };
 
     router.get('/robots.txt', (req, res) => {
@@ -108,7 +103,8 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             res.set('X-Robots-Tag', 'noindex, follow');
             return res.type('application/xml').send(buildSitemapXml(siteOrigin, paths));
         } catch (error) {
-            return failLoader(res, next, error);
+            res.set('X-Robots-Tag', NOINDEX);
+            return next(error);
         }
     });
 
@@ -128,87 +124,7 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
         }));
     }
 
-    const sendPrivateShell = (req, res) => sendSpaShell(req, res);
-
-    // These paths must be handled before /provider/:id so they never reach the
-    // public provider lookup.
-    router.get('/provider/dashboard', sendPrivateShell);
-    router.get('/provider/register', sendPrivateShell);
-
-    router.get('/categories/:slug', (req, res) => {
-        const category = getPublicCategory(req.params.slug);
-        if (!category) return sendSpaShell(req, res, { status: 404, forceNoindex: true });
-
-        return sendSpaShell(req, res, {
-            overrides: {
-                title: `${category.name} | Servicios a tu Hogar`,
-                description: category.description
-            }
-        });
-    });
-
-    router.get('/service/:id', async (req, res, next) => {
-        try {
-            const service = await loadPublicServiceSeo(db, req.params.id);
-            if (!service) return sendSpaShell(req, res, { status: 404, forceNoindex: true });
-
-            const title = normalizeSingleLine(service.title) || 'Detalle del servicio';
-            const providerName = normalizeSingleLine(service.provider_name);
-            const description = normalizeSingleLine(service.description).slice(0, 160)
-                || `Revisa el detalle y cobertura de este servicio${providerName ? ` ofrecido por ${providerName}` : ''}.`;
-
-            return sendSpaShell(req, res, {
-                overrides: {
-                    title: `${title} | Servicios a tu Hogar`,
-                    description,
-                    image: getSafeImageUrl(getFirstImage(service.image_urls), siteOrigin)
-                }
-            });
-        } catch (error) {
-            return failLoader(res, next, error);
-        }
-    });
-
-    router.get('/provider/:id', async (req, res, next) => {
-        try {
-            const provider = await loadPublicProviderSeo(db, req.params.id);
-            if (!provider) return sendSpaShell(req, res, { status: 404, forceNoindex: true });
-
-            const name = normalizeSingleLine(provider.name) || 'Proveedor';
-            const description = normalizeSingleLine(provider.bio).slice(0, 160)
-                || 'Conoce el perfil y los servicios de este profesional.';
-
-            return sendSpaShell(req, res, {
-                overrides: {
-                    title: `${name} | Servicios a tu Hogar`,
-                    description,
-                    image: getSafeImageUrl(provider.profile_image_url, siteOrigin),
-                    type: 'profile'
-                }
-            });
-        } catch (error) {
-            return failLoader(res, next, error);
-        }
-    });
-
-    router.get('/legal/:slug', async (req, res, next) => {
-        try {
-            const policy = await loadPublicPolicySeo(db, req.params.slug);
-            if (!policy) return sendSpaShell(req, res, { status: 404, forceNoindex: true });
-
-            return sendSpaShell(req, res, {
-                overrides: {
-                    title: `${policy.title} | Servicios a tu Hogar`,
-                    description: stripHtml(policy.content).slice(0, 160)
-                        || `${policy.title} de la plataforma Servicios a tu Hogar.`
-                }
-            });
-        } catch (error) {
-            return failLoader(res, next, error);
-        }
-    });
-
-    router.get(/.*/, (req, res, next) => {
+    router.get(/.*/, async (req, res, next) => {
         if (req.path.startsWith('/api')) return next();
 
         if (path.extname(req.path)) {
@@ -216,11 +132,35 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             return res.status(404).type('text').send('Asset not found');
         }
 
-        if (!isKnownSpaRoute(req.path)) {
+        const resolved = resolveApplicationRoute(req.path);
+        if (!resolved) {
             return sendSpaShell(req, res, { status: 404, forceNoindex: true });
         }
 
-        return sendSpaShell(req, res);
+        if (resolved.definition.renderMode !== 'ssr') {
+            return sendSpaShell(req, res);
+        }
+
+        try {
+            const document = await loadPublicRouteDocument({ db, pathname: req.path });
+            if (!document || document.status === 404) {
+                return sendSpaShell(req, res, { status: 404, forceNoindex: true });
+            }
+
+            return sendSpaShell(req, res, {
+                status: document.status,
+                overrides: document.seo,
+                ssrPage: document.page
+            });
+        } catch (error) {
+            logger.error('Public SSR loader failed.', {
+                path: req.path,
+                correlationId: req.correlationId,
+                errorType: error?.name || 'Error',
+                errorCode: error?.code || 'SSR_LOADER_FAILURE'
+            });
+            return sendSsrFailure(req, res);
+        }
     });
 
     return router;

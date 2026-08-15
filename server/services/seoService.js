@@ -2,9 +2,9 @@ export {
     SEO_CACHE_HEADERS,
     buildRobotsTxt,
     getSiteOrigin,
-    injectSeoMetadata,
-    isKnownSpaRoute,
+    injectSeoMetadata
 } from './seoService.legacy.js';
+export { isKnownApplicationRoute as isKnownSpaRoute } from './publicRouteManifest.js';
 
 import {
     buildSitemapXml as buildStaticSitemapXml,
@@ -48,7 +48,12 @@ export const buildSitemapXml = (origin = getSiteOrigin(), paths) => {
 
 export const getRouteSeo = (options = {}) => {
     const seo = getLegacyRouteSeo(options);
-    return options.forceNoindex
-        ? { ...seo, canonical: null }
-        : seo;
+    if (options.forceNoindex) return { ...seo, canonical: null };
+
+    const canonical = options.overrides
+        && Object.prototype.hasOwnProperty.call(options.overrides, 'canonical')
+        ? options.overrides.canonical
+        : seo.canonical;
+
+    return { ...seo, canonical };
 };

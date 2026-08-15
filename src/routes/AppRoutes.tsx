@@ -10,9 +10,6 @@ import LoginForm from '../components/LoginForm';
 import ForgotPasswordPage from '../components/ForgotPasswordPage';
 import ResetPasswordPage from '../components/ResetPasswordPage';
 import StyleGuidePage from '../components/StyleGuidePage';
-import AdminDashboard from '../components/admin/AdminDashboard';
-import ProviderDashboard from '../components/provider/ProviderDashboard';
-import ClientDashboard from '../components/client/ClientDashboard';
 import SearchResultsPage from '../components/public/SearchResultsPage';
 import ServiceDetailPage from '../components/public/ServiceDetailPage';
 import ProviderPublicProfile from '../components/public/ProviderPublicProfile';
@@ -24,6 +21,10 @@ import LegalPolicy from '../components/public/LegalPolicy';
 import WhatsAppWidget from '../components/common/WhatsAppWidget';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../stores/authStore';
+
+const AdminDashboard = React.lazy(() => import('../components/admin/AdminDashboard'));
+const ProviderDashboard = React.lazy(() => import('../components/provider/ProviderDashboard'));
+const ClientDashboard = React.lazy(() => import('../components/client/ClientDashboard'));
 
 // Route Guard Component
 interface ProtectedRouteProps {
@@ -69,6 +70,18 @@ const StandardLayout: React.FC<{ children: React.ReactNode, navigateTo: (page: s
         </div>
     );
 };
+
+const NotFoundPage: React.FC = () => (
+    <section className="container mx-auto px-4 py-20 text-center">
+        <h1 className="text-3xl font-bold text-gray-900">Página no encontrada</h1>
+        <p className="mt-4 text-gray-600">
+            La dirección solicitada no existe o ya no está disponible.
+        </p>
+        <a href="/" className="mt-6 inline-flex font-semibold text-brand-primary hover:underline">
+            Volver al inicio
+        </a>
+    </section>
+);
 
 const AppRoutes: React.FC = () => {
     const { setTheme } = useAppStore();
@@ -136,7 +149,10 @@ const AppRoutes: React.FC = () => {
     return (
         <>
             <ScrollToTop />
-            <Routes>
+            <React.Suspense fallback={(
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">Cargando área privada...</div>
+            )}>
+              <Routes>
                 {/* Dashboards */}
                 <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                 <Route path="/provider/dashboard" element={<ProtectedRoute allowedRoles={['provider']}><ProviderDashboard /></ProtectedRoute>} />
@@ -163,8 +179,9 @@ const AppRoutes: React.FC = () => {
                 <Route path="/style-guide" element={<StandardLayout navigateTo={navigateToAdapter}><StyleGuidePage /></StandardLayout>} />
 
                 {/* Fallback */}
-                <Route path="*" element={<StandardLayout navigateTo={navigateToAdapter}><HomePage navigateTo={navigateToAdapter} setTheme={setTheme} /></StandardLayout>} />
-            </Routes>
+                <Route path="*" element={<StandardLayout navigateTo={navigateToAdapter}><NotFoundPage /></StandardLayout>} />
+              </Routes>
+            </React.Suspense>
         </>
     );
 };

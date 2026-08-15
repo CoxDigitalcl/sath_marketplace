@@ -111,6 +111,12 @@ const getQuery = (db) => {
     return db.pool.query.bind(db.pool);
 };
 
+const clampLimit = (value, fallback = 12, maximum = 50) => {
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+    return Math.min(parsed, maximum);
+};
+
 export const getPublicCategory = (slug) => PUBLIC_CATEGORY_BY_SLUG.get(String(slug || '').toLowerCase()) || null;
 
 export const loadPublicServiceSeo = async (db, id) => {
@@ -120,10 +126,18 @@ export const loadPublicServiceSeo = async (db, id) => {
     const result = await query(`
         SELECT
             s.id,
+            s.provider_id,
             s.title,
             s.description,
+            s.price,
+            s.duration_minutes,
+            s.type,
+            s.pricing_type,
             s.image_urls,
-            COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS provider_name
+            s.cover_image_url,
+            COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS provider_name,
+            pp.coverage_area,
+            pp.coverage_region_name
         FROM services s
         JOIN provider_profiles pp ON pp.user_id = s.provider_id
         JOIN users u ON u.id = s.provider_id
@@ -147,6 +161,8 @@ export const loadPublicProviderSeo = async (db, id) => {
             pp.user_id AS id,
             COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS name,
             pp.bio,
+            pp.coverage_area,
+            pp.coverage_region_name,
             CASE
                 WHEN pp.profile_image_status = 'approved' THEN pp.profile_image_url
                 ELSE NULL
@@ -161,6 +177,61 @@ export const loadPublicProviderSeo = async (db, id) => {
     `, [id]);
 
     return result.rows[0] || null;
+};
+
+export const loadPublicServiceCards = async (db, { category, providerId, limit = 12 } = {}) => {
+    const query = getQuery(db);
+    const params = [];
+    const filters = [];
+
+    if (category) {
+        const publicCategory = getPublicCategory(category);
+        if (!publicCategory) return [];
+        params.push(publicCategory.slug);
+        filters.push(`s.category = $${params.length}`);
+    }
+
+    if (providerId) {
+        if (!isValidUuid(providerId)) return [];
+        params.push(providerId);
+        filters.push(`s.provider_id = $${params.length}`);
+    }
+
+    params.push(clampLimit(limit));
+    const limitPlaceholder = `$${params.length}`;
+    const extraFilters = filters.length > 0 ? ` AND ${filters.join(' AND ')}` : '';
+    const result = await query(`
+        SELECT
+            s.id,
+            s.provider_id,
+            s.title,
+            s.description,
+            s.price,
+            s.type,
+            COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS provider_name,
+            pp.coverage_area,
+            pp.coverage_region_name
+        FROM services s
+        JOIN provider_profiles pp ON pp.user_id = s.provider_id
+        JOIN users u ON u.id = s.provider_id
+        WHERE s.is_active = TRUE
+          AND s.moderation_status = 'approved'
+          AND pp.is_verified = TRUE
+          AND COALESCE(u.is_blocked, FALSE) = FALSE
+          ${extraFilters}
+        ORDER BY s.created_at DESC
+        LIMIT ${limitPlaceholder}
+    `, params);
+
+    return result.rows;
+};
+
+export const loadPublicProviderPage = async (db, id) => {
+    const provider = await loadPublicProviderSeo(db, id);
+    if (!provider) return null;
+
+    const services = await loadPublicServiceCards(db, { providerId: id, limit: 24 });
+    return { ...provider, services };
 };
 
 export const loadPublicPolicies = async (db) => {
@@ -201,7 +272,7 @@ export const loadPublicPolicySeo = async (db, slug) => {
     return policies.find((policy) => policy.slug === normalizedSlug) || null;
 };
 
-export const loadPublicSitemapPaths = async (db) => {
+export const loadPublicDynamicSitemapPaths = async (db) => {
     const query = getQuery(db);
     const [servicesResult, providersResult, policies] = await Promise.all([
         query(`
@@ -230,9 +301,6 @@ export const loadPublicSitemapPaths = async (db) => {
     ]);
 
     const paths = [
-        '/',
-        '/categories',
-        ...PUBLIC_CATEGORIES.map((category) => `/categories/${category.slug}`),
         ...servicesResult.rows
             .map((row) => row.id)
             .filter(isValidUuid)

@@ -8,7 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+dist/*
+!dist/index.html
+!dist/assets/
+!dist/assets/**
+!dist/images/
+dist/images/*
+!dist/images/logo-sath-26.png
 dist-ssr
 *.local
 
