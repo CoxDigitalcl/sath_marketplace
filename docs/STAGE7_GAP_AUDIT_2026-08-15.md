@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-08-15
 **Alcance:** CI, observabilidad, medición, despliegue gradual y rollback del marketplace Servicios a tu Hogar.
-**Estado de remediación:** 7A y 7B están integradas y desplegadas. La telemetría 7B está activa; su prueba controlada detectó una brecha de éxito parcial en el outbox que se corrige con checkpoints por entrega. G6 todavía requiere confirmar SimpleFactura, configurar un canal externo y cerrar 7C.
+**Estado de remediación:** 7A, 7B y el hotfix de entregas parciales están integrados y desplegados. La reconciliación de notificaciones terminó sin duplicados; 7C-A y el ensayo 7C-B están completados. SimpleFactura queda diferido por dependencia del cliente; todavía se requiere configurar un canal externo y preparar 7C-C antes de aprobar G6.
 
 ## Resumen ejecutivo
 
@@ -114,7 +114,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ## Decisión de gate
 
-**G6: no aprobado todavía.** 7A y el despliegue base de 7B están cerrados. Permanecen desplegar/verificar el hotfix de entregas parciales, confirmar SimpleFactura, configurar al menos un canal externo y ensayar el rollback de 7C antes de la apertura pública.
+**G6: no aprobado todavía.** 7A, 7B, el hotfix, 7C-A y el ensayo 7C-B están cerrados. Permanecen preparar la apertura controlada 7C-C, configurar al menos un canal externo y resolver la excepción de SimpleFactura antes de habilitar pagos públicos.
 
 ## Dependencias del dueño
 
