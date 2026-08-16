@@ -34,24 +34,20 @@ pool.on('error', async (err, client) => {
 // Wrapped Query Function for Performance Monitoring
 export const query = async (text, params) => {
     const start = process.hrtime();
-    try {
-        const result = await pool.query(text, params);
+    const result = await pool.query(text, params);
 
-        // Calculate Duration
-        const diff = process.hrtime(start);
-        const duration = (diff[0] * 1000 + diff[1] / 1e6).toFixed(2);
+    // Calculate Duration
+    const diff = process.hrtime(start);
+    const duration = (diff[0] * 1000 + diff[1] / 1e6).toFixed(2);
 
-        // Slow Query Threshold: 100ms
-        if (duration > 100) {
-            // Trim query for log readability
-            const cleanQuery = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : 'PreparedStatement';
-            logger.warn(`[SLOW DB QUERY] ${duration}ms - ${cleanQuery.substring(0, 200)}...`);
-        }
-
-        return result;
-    } catch (error) {
-        throw error;
+    // Slow Query Threshold: 100ms
+    if (duration > 100) {
+        // Trim query for log readability
+        const cleanQuery = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : 'PreparedStatement';
+        logger.warn(`[SLOW DB QUERY] ${duration}ms - ${cleanQuery.substring(0, 200)}...`);
     }
+
+    return result;
 };
 
 export { pool };

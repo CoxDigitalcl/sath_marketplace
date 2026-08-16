@@ -65,7 +65,7 @@ class SimpleFacturaService {
         } catch (error) {
             const msg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
             logger.error(`[SimpleFactura] Token Fetch Error: ${msg}`);
-            throw new Error(`Auth Failed: ${msg}`);
+            throw new Error(`Auth Failed: ${msg}`, { cause: error });
         }
     }
 
@@ -239,7 +239,7 @@ class SimpleFacturaService {
         } catch (error) {
             const msg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
             logger.error(`[SimpleFactura] DTE Generation Error: ${msg}`);
-            throw new Error(`DTE Failed: ${msg}`);
+            throw new Error(`DTE Failed: ${msg}`, { cause: error });
         }
     }
 

@@ -911,7 +911,7 @@ const PolicySettings = () => {
             try {
                 await saveToBackend(newPolicies);
                 setPolicies(newPolicies);
-            } catch (e) { }
+            } catch (e) { /* Error feedback is handled by saveToBackend. */ }
         }
     };
 

@@ -90,7 +90,7 @@ const categoryItems = () => PUBLIC_CATEGORIES.map((category) => ({
 const toServiceItem = (service) => ({
     href: buildServicePath(service.id, service.title),
     title: normalizeSingleLine(service.title) || 'Servicio',
-    description: normalizeSingleLine(service.description).slice(0, 180),
+    description: parsePublicServiceDescription(service.description).plainText.slice(0, 180),
     providerName: normalizeSingleLine(service.provider_name) || 'Proveedor verificado',
     providerHref: service.provider_id ? buildProviderPath(service.provider_id, service.provider_name) : null,
     priceLabel: formatPrice(service.price),
@@ -280,6 +280,7 @@ const publicDefinitions = [
             }
             return {
                 status: 200,
+                indexable: data.services.length > 0,
                 canonical: makeCanonical(canonicalPath),
                 seo: {
                     title: `${name} | Servicios a tu Hogar`,

@@ -259,7 +259,7 @@ export const normalizeRequestedSlots = ({
 };
 
 const rollbackQuietly = async (client) => {
-    try { await client.query('ROLLBACK'); } catch {}
+    try { await client.query('ROLLBACK'); } catch { /* Best-effort rollback. */ }
 };
 
 const responseFromStoredIdempotency = (row) => {

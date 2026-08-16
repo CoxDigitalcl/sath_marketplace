@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - 'codex/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Repository secret scan
+        run: npm run security:secrets
+
+      - name: Validate migrations
+        run: npm run validate:migrations
+
+      - name: Test
+        run: npm run test:serial
+
+      - name: Build
+        run: npm run build
+
+      - name: Performance budget
+        run: npm run performance:budget
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+  clean-schema:
+    name: Clean schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sath_ci
+          POSTGRES_USER: sath_ci
+          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sath_ci -d sath_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: sath_ci
+      PGUSER: sath_ci
+      PGPASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply clean schema
+        run: psql --set ON_ERROR_STOP=1 --file server/scripts/schema.sql
+
+      - name: Verify schema is idempotent
+        run: psql --set ON_ERROR_STOP=1 --file server/scripts/schema.sql

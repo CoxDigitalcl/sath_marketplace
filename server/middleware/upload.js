@@ -19,7 +19,7 @@ try {
     fs.chmodSync(privateUploadDir, 0o700);
 } catch (error) {
     if (process.env.NODE_ENV === 'production') {
-        throw new Error(`Could not harden upload directory permissions: ${error.message}`);
+        throw new Error(`Could not harden upload directory permissions: ${error.message}`, { cause: error });
     }
     console.error('Could not harden upload directory permissions:', error.message);
 }

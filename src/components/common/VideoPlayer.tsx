@@ -40,7 +40,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
         // - youtube.com/embed/VIDEO_ID
         // - youtube.com/v/VIDEO_ID
         // - youtube.com/shorts/VIDEO_ID
-        const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const youtubeRegex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
         const ytMatch = url.match(youtubeRegex);
 
         if (ytMatch && ytMatch[1]) {
@@ -64,7 +64,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
         }
 
         // Vimeo
-        const vimeoRegex = /(?:vimeo\.com\/(?:video\/|channels\/[^\/]+\/|groups\/[^\/]+\/videos\/)?|player\.vimeo\.com\/video\/)(\d+)/;
+        const vimeoRegex = /(?:vimeo\.com\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/videos\/)?|player\.vimeo\.com\/video\/)(\d+)/;
         const vimeoMatch = url.match(vimeoRegex);
 
         if (vimeoMatch && vimeoMatch[1]) {

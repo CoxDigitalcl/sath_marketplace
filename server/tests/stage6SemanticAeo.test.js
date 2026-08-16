@@ -156,6 +156,90 @@ test('empty category is noindex and omitted from the dynamic sitemap', async () 
     assert.equal(paths.includes('/categories/categoria-interna'), false);
 });
 
+test('SSR service cards expose plain summaries without authoring markdown', async () => {
+    const cardDb = {
+        pool: {
+            query: async () => ({
+                rows: [{
+                    id: '33333333-3333-4333-8333-333333333333',
+                    provider_id: '11111111-1111-4111-8111-111111111111',
+                    title: 'Gasfiteria domiciliaria',
+                    description: `**Resumen del servicio:** Reparacion de filtraciones.
+
+**Caracteristicas principales:**
+- Diagnostico inicial`,
+                    price: 45000,
+                    type: 'presencial',
+                    provider_name: 'Ana Servicios',
+                    coverage_area: 'Santiago',
+                    coverage_region_name: null
+                }]
+            })
+        }
+    };
+
+    const document = await loadPublicRouteDocument({ db: cardDb, pathname: '/' });
+    const html = injectPublicSsr(
+        '<!doctype html><html><head></head><body><div id="root"></div></body></html>',
+        document.page
+    );
+
+    assert.equal(document.page.services[0].description, 'Reparacion de filtraciones. Diagnostico inicial');
+    assert.doesNotMatch(html, /\*\*|Caracteristicas principales:/);
+});
+
+test('provider without public services is noindex and provider sitemap query requires public offer', async () => {
+    const providerId = '11111111-1111-4111-8111-111111111111';
+    const emptyProviderDb = {
+        pool: {
+            query: async (sql) => {
+                if (/WHERE pp\.user_id = \$1/.test(sql)) {
+                    return {
+                        rows: [{
+                            id: providerId,
+                            name: 'Proveedor sin oferta',
+                            bio: 'Perfil sin servicios publicos.',
+                            coverage_area: 'Santiago',
+                            coverage_region_name: null,
+                            profile_image_url: null
+                        }]
+                    };
+                }
+                if (/FROM services s/.test(sql)) return { rows: [] };
+                throw new Error(`Unexpected query: ${sql}`);
+            }
+        }
+    };
+
+    const document = await loadPublicRouteDocument({
+        db: emptyProviderDb,
+        pathname: `/provider/proveedor-sin-oferta-${providerId}`
+    });
+    assert.equal(document.status, 200);
+    assert.equal(document.indexable, false);
+
+    const sitemapDb = {
+        pool: {
+            query: async (sql) => {
+                if (/FROM platform_settings/.test(sql)) return { rows: [] };
+                if (/SELECT DISTINCT s\.category/.test(sql)) return { rows: [] };
+                if (/SELECT s\.id, s\.title/.test(sql)) return { rows: [] };
+                if (/SELECT pp\.user_id AS id/.test(sql)) {
+                    assert.match(sql, /EXISTS\s*\(\s*SELECT 1\s+FROM services s/is);
+                    assert.match(sql, /s\.provider_id = pp\.user_id/);
+                    assert.match(sql, /s\.is_active = TRUE/);
+                    assert.match(sql, /s\.moderation_status = 'approved'/);
+                    return { rows: [] };
+                }
+                throw new Error(`Unexpected query: ${sql}`);
+            }
+        }
+    };
+
+    const paths = await loadPublicSitemapPaths(sitemapDb);
+    assert.equal(paths.some((entry) => entry.startsWith('/provider/')), false);
+});
+
 test('SSR service answer block exposes key questions, disclosure and traceable CTA', () => {
     const page = {
         ...serviceDocument.page,
