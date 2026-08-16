@@ -323,7 +323,7 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** impedir regresiones y abrir tráfico con capacidad de detectar y revertir fallos.
 
-**Estado de remediación al 2026-08-15:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A está implementada y validada localmente: lint, typecheck, escaneo de secretos, validación de migraciones, 143 pruebas, build, presupuesto y dependency audit; workflow GitHub Actions y secreto CI preparados. Pendiente: commit/push, primera ejecución verde, activar protección de `main` y continuar con 7B. G6 aún no está aprobado.
+**Estado de remediación al 2026-08-15:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A está cerrada técnicamente: implementación publicada en `b7eb443`, `Quality gate` y `Clean schema` verdes, secreto CI configurado y `main` protegido con PR/checks obligatorios, historial lineal y sin force-push. El PR #1 permanece en borrador para el merge controlado. Pendiente: merge/deploy del hotfix y continuar con 7B. G6 aún no está aprobado.
 
 **Automatización CI**
 
