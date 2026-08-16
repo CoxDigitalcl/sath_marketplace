@@ -43,3 +43,9 @@ Los rechazos SMTP ahora lanzan un error codificado, el outbox conserva el evento
 7. Activar el worker periódico sólo cuando el outbox quede limpio y los dos efectos hayan sido comprobados.
 
 La migración es aditiva. Un rollback de código puede conservar las columnas nuevas; no requiere restauración de base de datos.
+
+## Resultado final y dependencia diferida
+
+El hotfix fue integrado mediante el PR #3 y desplegado en `6fa5ba7`. La reconciliación controlada procesó un evento de notificaciones en un lote: los dos correos pendientes fueron aceptados por la casilla controlada, el proveedor no recibió duplicados y el replay posterior fue omitido. Los cinco checkpoints requeridos quedaron consistentes para la reserva invitada.
+
+El único evento pendiente es `payment.invoice.requested`, con cero intentos y sin error. La comprobación del ambiente de SimpleFactura queda diferida porque el acceso al portal pertenece al cliente. Hasta esa revisión, el worker periódico permanece apagado y no se emiten DTE.

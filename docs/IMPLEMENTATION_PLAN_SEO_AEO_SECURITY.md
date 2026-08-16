@@ -323,7 +323,7 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** impedir regresiones y abrir tráfico con capacidad de detectar y revertir fallos.
 
-**Estado de remediación al 2026-08-16:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A fue integrada mediante el PR #1 y desplegada en `2d204cd`; 7B fue integrada mediante el PR #2 y desplegada en `acf6141`, con persistencia y monitor verificados en cPanel. La reconciliación sandbox detectó un falso éxito ante rechazos SMTP y originó la remediación documentada en [STAGE7B_OUTBOX_RECONCILIATION_2026-08-16.md](./STAGE7B_OUTBOX_RECONCILIATION_2026-08-16.md). Permanecen confirmar el ambiente de SimpleFactura, configurar un canal externo y cerrar 7C antes de aprobar G6.
+**Estado de remediación al 2026-08-16:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A fue integrada mediante el PR #1 y desplegada en `2d204cd`; 7B fue integrada mediante el PR #2 y desplegada en `acf6141`. El hotfix de entregas parciales fue integrado mediante el PR #3 y desplegado en `6fa5ba7`; la reconciliación de notificaciones terminó sin duplicados. SimpleFactura queda diferido por dependencia del cliente y bloquea pagos públicos. 7C-A y el ensayo de rollback 7C-B están completados según [STAGE7C_GAP_AUDIT_2026-08-16.md](./STAGE7C_GAP_AUDIT_2026-08-16.md). Permanecen preparar 7C-C y configurar un canal externo antes de aprobar G6.
 
 **Automatización CI**
 
