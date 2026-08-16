@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Page } from '../types';
 import { api } from '../api/client';
 import { useAuthStore } from '../stores/authStore';
-import { Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Shield, Star, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Shield, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface LoginFormProps {
@@ -218,7 +218,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ navigateTo }) => {
           <div>
             <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-white/90 text-sm font-medium">
               <Shield className="w-4 h-4" />
-              Plataforma Verificada y Segura
+              Acceso protegido a tu cuenta
             </div>
           </div>
 
@@ -228,40 +228,26 @@ const LoginForm: React.FC<LoginFormProps> = ({ navigateTo }) => {
               Servicios<br />profesionales<br />a tu puerta.
             </h2>
             <p className="text-white/80 text-lg max-w-sm leading-relaxed">
-              Encuentra profesionales verificados para todos los servicios de tu hogar. Seguro, confiable y sin complicaciones.
+              Encuentra servicios para tu hogar y gestiona solicitudes, reservas y pagos desde tu cuenta.
             </p>
           </div>
 
           {/* Bottom: Stats/Trust */}
           <div className="space-y-6">
-            {/* Testimonial card */}
+            {/* Platform information */}
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-              <div className="flex gap-1 mb-3">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                ))}
-              </div>
-              <p className="text-white/90 text-sm leading-relaxed italic">
-                "Increíble plataforma. Encontré un electricista certificado en minutos. 
-                 Todo el proceso fue transparente y seguro."
+              <p className="text-white font-medium">Información visible antes de reservar</p>
+              <p className="text-white/80 text-sm leading-relaxed mt-2">
+                Revisa el servicio, su precio publicado, cobertura y condiciones desde un único lugar.
               </p>
-              <div className="flex items-center gap-3 mt-4">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm">
-                  MR
-                </div>
-                <div>
-                  <p className="text-white font-medium text-sm">María Rodríguez</p>
-                  <p className="text-white/60 text-xs">Cliente Verificada</p>
-                </div>
-              </div>
             </div>
 
-            {/* Trust stats */}
+            {/* Platform capabilities */}
             <div className="grid grid-cols-3 gap-4">
               {[
-                { value: '500+', label: 'Profesionales' },
-                { value: '15K+', label: 'Servicios' },
-                { value: '4.8', label: 'Valoración' },
+                { value: 'Buscar', label: 'Servicios' },
+                { value: 'Reservar', label: 'Agenda' },
+                { value: 'Revisar', label: 'Pagos' },
               ].map((stat) => (
                 <div key={stat.label} className="text-center">
                   <p className="text-2xl font-bold text-white">{stat.value}</p>

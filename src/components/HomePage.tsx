@@ -167,14 +167,14 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                         <div className="lg:w-1/2 text-center lg:text-left">
                             <div>
                                 <span className="inline-block py-1 px-3 rounded-full bg-brand-primary/10 text-brand-primary text-sm font-semibold mb-4">
-                                    #1 Marketplace de Servicios en Chile
+                                    Marketplace de servicios para el hogar en Chile
                                 </span>
                                 <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 leading-tight">
                                     Encuentra al experto <br />
                                     <span className="text-brand-primary">perfecto para ti</span>
                                 </h1>
                                 <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto lg:mx-0">
-                                    Desde reparaciones del hogar hasta clases particulares. Conecta con profesionales verificados y paga de forma segura con nuestra garantía de satisfacción.
+                                    Desde reparaciones del hogar hasta clases particulares. Conecta con proveedores con identidad verificada y revisa precio, cobertura y condiciones antes de reservar.
                                 </p>
 
                                 <div className="bg-white p-2 rounded-2xl sm:rounded-full shadow-lg border border-gray-100 flex flex-col sm:flex-row items-center max-w-xl mx-auto lg:mx-0">
@@ -211,9 +211,9 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                 </div>
 
                                 <div className="mt-8 flex flex-wrap justify-center lg:justify-start gap-6 text-sm text-gray-500">
-                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Verificados</span>
-                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Pago Seguro</span>
-                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Sin Comisiones Ocultas</span>
+                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Identidad verificada</span>
+                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Pago procesado en la plataforma</span>
+                                    <span className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1 text-green-500" /> Precio informado antes de pagar</span>
                                 </div>
                             </div>
                         </div>
@@ -434,7 +434,7 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                             >
                                 Servicios Destacados
                             </motion.h2>
-                            <p className="mt-2 text-gray-600">Los mejores profesionales calificados por la comunidad</p>
+                            <p className="mt-2 text-gray-600">Servicios activos publicados por proveedores verificados</p>
                         </div>
 
                         {/* Filters - 4 Tabs with Icons */}
@@ -676,12 +676,12 @@ const HomePage: React.FC<HomePageProps> = ({ navigateTo, setTheme }) => {
                                     Haz crecer tu negocio con Serviciosatuhogar
                                 </motion.h2>
                                 <p className="text-lg text-gray-300 mb-8">
-                                    Únete a miles de profesionales que encuentran nuevos clientes cada día. Gestiona tu agenda, asegura tus pagos y construye tu reputación online.
+                                    Publica tus servicios y gestiona solicitudes, agenda y pagos desde un solo lugar.
                                 </p>
                                 <ul className="space-y-4 mb-8">
                                     <li className="flex items-center text-gray-200">
                                         <div className="bg-green-500/20 p-1 rounded-full mr-3"><CheckCircleIcon className="h-5 w-5 text-green-400" /></div>
-                                        <span>Pagos garantizados semanalmente</span>
+                                        <span>Pagos registrados y conciliados en la plataforma</span>
                                     </li>
                                     <li className="flex items-center text-gray-200">
                                         <div className="bg-green-500/20 p-1 rounded-full mr-3"><CheckCircleIcon className="h-5 w-5 text-green-400" /></div>

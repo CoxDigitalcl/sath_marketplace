@@ -44,9 +44,42 @@ const PUBLIC_SERVICE_FIELDS = new Set([
     'created_at'
 ]);
 
-export const toPublicServiceDto = (row = {}) => Object.fromEntries(
-    Object.entries(row).filter(([key]) => PUBLIC_SERVICE_FIELDS.has(key))
-);
+const BLOCKED_PUBLIC_FEATURES = new Set([
+    'garantía de satisfacción',
+    'seguro contra daños',
+    'pago seguro',
+    'identidad verificada'
+]);
+
+const parseFeatureList = (value) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string' || !value.trim()) return [];
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+export const sanitizePublicServiceFeatures = (value) => parseFeatureList(value)
+    .filter(feature => typeof feature === 'string')
+    .map(feature => feature.trim())
+    .filter(Boolean)
+    .filter(feature => !BLOCKED_PUBLIC_FEATURES.has(feature.toLocaleLowerCase('es-CL')));
+
+export const toPublicServiceDto = (row = {}) => {
+    const dto = Object.fromEntries(
+        Object.entries(row).filter(([key]) => PUBLIC_SERVICE_FIELDS.has(key))
+    );
+
+    if (Object.hasOwn(dto, 'features')) {
+        dto.features = sanitizePublicServiceFeatures(dto.features);
+    }
+
+    return dto;
+};
 
 export const getPublicProviderName = (profile = {}) => {
     const candidates = [profile.store_name, profile.full_name];

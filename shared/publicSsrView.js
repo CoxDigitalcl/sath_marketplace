@@ -121,6 +121,31 @@ const CategoryPage = ({ page }) => h(React.Fragment, null,
     h('p', { className: 'mt-8' }, link({ href: '/categories', label: 'Explorar otras categorías' }))
 );
 
+const ServiceDescription = ({ sections = [], fallback = '' }) => {
+    const content = sections.length > 0
+        ? sections
+        : [{ heading: 'Descripción', paragraphs: fallback ? [fallback] : [], items: [] }];
+
+    return h(
+        'div',
+        { className: 'mt-4 space-y-6 text-gray-700' },
+        content.map((section, index) => h(
+            'section',
+            { key: `${section.heading}-${index}` },
+            h('h3', { className: 'font-semibold text-gray-900' }, section.heading),
+            section.paragraphs?.map((paragraph, paragraphIndex) => h(
+                'p',
+                { key: `p-${paragraphIndex}`, className: 'mt-2 leading-7' },
+                paragraph
+            )),
+            section.items?.length
+                ? h('ul', { className: 'mt-2 list-disc space-y-1 pl-5' },
+                    section.items.map((item, itemIndex) => h('li', { key: `i-${itemIndex}` }, item)))
+                : null
+        ))
+    );
+};
+
 const ServicePage = ({ page }) => h(
     'article',
     { className: 'grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]' },
@@ -128,16 +153,19 @@ const ServicePage = ({ page }) => h(
         h(PageIntro, { page }),
         h('section', { 'aria-labelledby': 'ssr-service-description', className: 'mt-8 rounded-xl bg-white p-6 shadow-sm' },
             h('h2', { id: 'ssr-service-description', className: 'text-xl font-bold text-gray-900' }, 'Acerca de este servicio'),
-            h('p', { className: 'mt-3 whitespace-pre-line leading-7 text-gray-700' }, page.fullDescription)
+            h(ServiceDescription, { sections: page.descriptionSections, fallback: page.fullDescription })
         ),
         page.provider
             ? h('section', { 'aria-labelledby': 'ssr-provider-heading', className: 'mt-6 rounded-xl bg-white p-6 shadow-sm' },
-                h('h2', { id: 'ssr-provider-heading', className: 'text-xl font-bold text-gray-900' }, 'Proveedor verificado'),
-                h('p', { className: 'mt-3' }, link({ href: page.provider.href, label: page.provider.name }))
+                h('h2', { id: 'ssr-provider-heading', className: 'text-xl font-bold text-gray-900' }, 'Identidad verificada'),
+                h('p', { className: 'mt-3' }, link({ href: page.provider.href, label: page.provider.name })),
+                h('p', { className: 'mt-3 text-sm leading-6 text-gray-600' },
+                    'La verificación confirma la identidad asociada a la cuenta; no certifica títulos, especialidades ni resultados.'
+                )
             )
             : null
     ),
-    h('aside', { className: 'rounded-xl border border-gray-200 bg-white p-6 shadow-sm' },
+    h('aside', { id: 'reservar', className: 'rounded-xl border border-gray-200 bg-white p-6 shadow-sm' },
         h('h2', { className: 'text-xl font-bold text-gray-900' }, 'Información del servicio'),
         h('dl', { className: 'mt-4 space-y-4' },
             page.priceLabel ? h('div', null,
@@ -153,8 +181,17 @@ const ServicePage = ({ page }) => h(
                 h('dd', { className: 'mt-1 text-gray-800' }, page.serviceType)
             ) : null
         ),
-        h('p', { className: 'mt-6 text-sm leading-6 text-gray-600' },
-            'La disponibilidad y el valor final se confirman antes del pago.'
+        page.pricingBasis ? h('p', { className: 'mt-6 text-sm leading-6 text-gray-600' }, page.pricingBasis) : null,
+        page.availabilitySummary ? h('p', { className: 'mt-3 text-sm leading-6 text-gray-600' }, page.availabilitySummary) : null,
+        page.lastUpdated ? h('p', { className: 'mt-3 text-xs text-gray-500' }, `Información actualizada: ${page.lastUpdated}`) : null,
+        h('a', {
+            href: '#reservar',
+            'data-analytics-event': 'service_booking_intent',
+            className: 'mt-6 inline-flex w-full justify-center rounded-lg bg-brand-primary px-4 py-3 font-semibold text-white'
+        }, 'Revisar disponibilidad y reservar'),
+        h('p', { className: 'mt-4 text-xs leading-5 text-gray-500' },
+            'La disponibilidad y el valor final se confirman antes del pago. ',
+            link({ href: page.termsHref, label: 'Revisar términos de uso' })
         )
     )
 );
@@ -164,12 +201,15 @@ const ProviderPage = ({ page }) => h(React.Fragment, null,
     h('dl', { className: 'mt-6 flex flex-wrap gap-6 rounded-xl bg-white p-6 shadow-sm' },
         h('div', null,
             h('dt', { className: 'text-sm font-medium text-gray-500' }, 'Verificación'),
-            h('dd', { className: 'mt-1 font-semibold text-green-700' }, 'Proveedor verificado')
+            h('dd', { className: 'mt-1 font-semibold text-green-700' }, 'Identidad verificada')
         ),
         page.scope ? h('div', null,
             h('dt', { className: 'text-sm font-medium text-gray-500' }, 'Cobertura'),
             h('dd', { className: 'mt-1 text-gray-800' }, page.scope)
         ) : null
+    ),
+    h('p', { className: 'mt-4 text-sm leading-6 text-gray-600' },
+        'La verificación confirma la identidad asociada a la cuenta; no certifica títulos, especialidades ni resultados.'
     ),
     h(ServiceLinks, {
         services: page.services,

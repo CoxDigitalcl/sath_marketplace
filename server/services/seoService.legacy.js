@@ -1,3 +1,5 @@
+import { serializeStructuredData } from './structuredData.js';
+
 const DEFAULT_SITE_ORIGIN = 'https://serviciosatuhogar.cl';
 
 const STATIC_SITEMAP_PATHS = Object.freeze([
@@ -195,7 +197,8 @@ export const getRouteSeo = ({ pathname = '/', query, overrides = {}, forceNoinde
 const removeManagedHeadTags = (html) => html
     .replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\b[^>]*(?:name=["'](?:description|robots|twitter:(?:card|title|description|image))["']|property=["']og:(?:title|description|image|url|type)["'])[^>]*>\s*/gi, '')
-    .replace(/<link\b[^>]*rel=["']canonical["'][^>]*>\s*/gi, '');
+    .replace(/<link\b[^>]*rel=["']canonical["'][^>]*>\s*/gi, '')
+    .replace(/<script\b[^>]*id=["']seo-structured-data["'][^>]*>[\s\S]*?<\/script>\s*/gi, '');
 
 export const injectSeoMetadata = (html, seo) => {
     if (!html || !/<\/head>/i.test(html)) return html;
@@ -216,12 +219,16 @@ export const injectSeoMetadata = (html, seo) => {
             `    <meta name="twitter:image" content="${escapeHtml(seo.image)}" />`
         ].join('\n') + '\n'
         : '';
+    const structuredDataTag = seo.structuredData
+        ? `    <script id="seo-structured-data" type="application/ld+json">${serializeStructuredData(seo.structuredData)}</script>`
+        : '';
     const tags = [
         `    <title>${escapeHtml(seo.title)}</title>`,
         `    <meta name="description" content="${escapeHtml(seo.description)}" />`,
         `    <meta name="robots" content="${escapeHtml(seo.robots)}" />`,
         canonicalTag.trimEnd(),
-        socialTags.trimEnd()
+        socialTags.trimEnd(),
+        structuredDataTag
     ].filter(Boolean).join('\n') + '\n';
 
     return removeManagedHeadTags(html).replace(/<\/head>/i, `${tags}</head>`);

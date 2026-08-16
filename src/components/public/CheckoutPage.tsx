@@ -586,8 +586,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                                     <div className="flex">
                                         <ShieldCheck className="text-blue-600 h-6 w-6 mr-3 flex-shrink-0" />
                                         <div>
-                                            <h4 className="font-bold text-blue-800">Garantía Serviciosatuhogar</h4>
-                                            <p className="text-sm text-blue-700 mt-1">Tu pago se mantiene seguro en custodia. El proveedor no recibe el dinero hasta que el servicio se completa a tu satisfacción.</p>
+                                            <h4 className="font-bold text-blue-800">Pago y liberación controlados</h4>
+                                            <p className="text-sm text-blue-700 mt-1">El pago se registra y libera según el estado de la reserva y las condiciones informadas. Consulta los <a href="/legal/terminos-y-condiciones-de-uso" className="underline">términos de uso</a> antes de confirmar.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -617,7 +617,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
                         {/* STEP 2: PAYMENT */}
                         {step === 2 && (
                             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center"><Lock size={20} className="mr-2 text-green-600" /> Pago Seguro</h2>
+                                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center"><Lock size={20} className="mr-2 text-green-600" /> Procesar pago</h2>
 
                                 {/* Simulated Payku Form */}
                                 <div className="space-y-4 max-w-md">

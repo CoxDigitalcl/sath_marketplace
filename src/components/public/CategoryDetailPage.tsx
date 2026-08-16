@@ -198,8 +198,8 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ categoryId = 'h
                             provider: s.provider_name || 'Proveedor Verificado',
                             provider_name: s.provider_name,
                             providerId: s.provider_id,
-                            rating: 5.0,
-                            reviews: 0,
+                            rating: Number(s.review_count) > 0 ? Number(s.rating ?? s.avg_rating) : null,
+                            reviews: Number(s.review_count) || 0,
                             price: typeof s.price === 'string' ? parseFloat(s.price) : s.price,
                             priceUnit: '',
                             categoryId: s.category,
@@ -292,7 +292,7 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ categoryId = 'h
                     <div className="flex flex-col md:flex-row md:items-center justify-between">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">{resolvedCategoryName}</h1>
-                            <p className="text-gray-600 mt-2">Encuentra a los mejores expertos en {resolvedCategoryName} verificados por nuestra comunidad.</p>
+                            <p className="text-gray-600 mt-2">Explora servicios de {resolvedCategoryName} publicados por proveedores con identidad verificada.</p>
                             {selectedSubcategory && (
                                 <button
                                     onClick={() => setSelectedSubcategory(null)}
@@ -301,12 +301,6 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ categoryId = 'h
                                     <Filter size={14} className="mr-1" /> Filtrado por: {selectedSubcategory} (Borrar)
                                 </button>
                             )}
-                        </div>
-                        <div className="mt-4 md:mt-0 flex gap-3">
-                            <div className="bg-gray-100 px-4 py-2 rounded-lg text-center">
-                                <span className="block font-bold text-lg text-gray-800">4.8</span>
-                                <span className="text-xs text-gray-500 uppercase">Rating Prom.</span>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -373,7 +367,6 @@ const CategoryDetailPage: React.FC<CategoryDetailPageProps> = ({ categoryId = 'h
                                 <select className="ml-2 bg-transparent border-none font-medium text-gray-900 focus:ring-0 cursor-pointer">
                                     <option>Recomendados</option>
                                     <option>Precio: Menor a Mayor</option>
-                                    <option>Mejor Valorados</option>
                                 </select>
                             </div>
                             <span className="text-sm text-gray-500">{filteredServices.length} resultados</span>

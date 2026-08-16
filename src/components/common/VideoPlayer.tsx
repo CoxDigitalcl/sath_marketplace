@@ -6,9 +6,11 @@ interface VideoPlayerProps {
     className?: string;
     poster?: string;
     autoPlay?: boolean;
+    title?: string;
+    transcript?: string;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, autoPlay = false }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, autoPlay = false, title = 'Video del servicio', transcript }) => {
     const [error, setError] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -46,7 +48,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
             return (
                 <iframe
                     src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=${autoPlay ? 1 : 0}&rel=0&origin=${origin}`}
-                    title="YouTube video player"
+                    title={`${title} (YouTube)`}
                     loading="lazy"
                     referrerPolicy="strict-origin-when-cross-origin"
                     className="w-full h-full absolute top-0 left-0 z-10"
@@ -69,7 +71,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
             return (
                 <iframe
                     src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${autoPlay ? 1 : 0}`}
-                    title="Vimeo video player"
+                    title={`${title} (Vimeo)`}
                     loading="lazy"
                     referrerPolicy="strict-origin-when-cross-origin"
                     className="w-full h-full absolute top-0 left-0 z-10"
@@ -92,6 +94,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
             return (
                 <video
                     src={url}
+                    aria-label={title}
                     controls
                     preload="metadata"
                     className="w-full h-full object-contain absolute top-0 left-0 z-10"
@@ -127,25 +130,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
     };
 
     return (
-        <div className={`relative w-full pb-[56.25%] bg-black rounded-lg overflow-hidden ${className}`}>
-            {/* 16:9 Aspect Ratio Container (pb-56.25%) */}
+        <div className={className}>
+            <div className="relative w-full pb-[56.25%] bg-black rounded-lg overflow-hidden">
+                {/* 16:9 Aspect Ratio Container (pb-56.25%) */}
 
-            {/* Loading State for Iframes/Video */}
-            {loading && !error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
-                    <Loader className="animate-spin text-gray-400" size={32} />
-                </div>
-            )}
-
-            {error ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500">
-                    <div className="text-center">
-                        <AlertCircle size={32} className="mx-auto mb-2 text-red-400" />
-                        <p className="text-sm">Error al cargar el video</p>
+                {/* Loading State for Iframes/Video */}
+                {loading && !error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                        <Loader className="animate-spin text-gray-400" size={32} />
                     </div>
-                </div>
-            ) : (
-                getVideoContent()
+                )}
+
+                {error ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500">
+                        <div className="text-center">
+                            <AlertCircle size={32} className="mx-auto mb-2 text-red-400" />
+                            <p className="text-sm">Error al cargar el video</p>
+                        </div>
+                    </div>
+                ) : (
+                    getVideoContent()
+                )}
+            </div>
+            {transcript?.trim() && (
+                <details className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                    <summary className="cursor-pointer font-medium text-gray-900">Transcripción del video</summary>
+                    <p className="mt-2 whitespace-pre-line leading-6">{transcript.trim()}</p>
+                </details>
             )}
         </div>
     );

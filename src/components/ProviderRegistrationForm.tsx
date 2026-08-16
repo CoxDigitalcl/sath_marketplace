@@ -278,16 +278,16 @@ const ProviderRegistrationForm: React.FC<ProviderRegistrationFormProps> = ({ nav
               Lleva tu<br />negocio al<br />siguiente nivel.
             </h2>
             <p className="text-gray-400 text-lg max-w-sm leading-relaxed">
-              Únete a cientos de profesionales que ya están creciendo con Serviciosatuhogar. Gestiona todo desde un solo lugar.
+              Publica tus servicios y gestiona solicitudes, agenda y pagos desde un solo lugar.
             </p>
           </div>
 
           {/* Benefits */}
           <div className="space-y-5">
             {[
-              { icon: DollarSign, title: 'Pagos Garantizados', desc: 'Cobra de forma segura con nuestro sistema de escrow' },
+              { icon: DollarSign, title: 'Pagos Registrados', desc: 'Consulta y concilia el estado de tus cobros en la plataforma' },
               { icon: BarChart3, title: 'Dashboard Profesional', desc: 'Analíticas y gestión de órdenes en tiempo real' },
-              { icon: Briefcase, title: 'Perfil Verificado', desc: 'Sello de confianza que aumenta tus ventas' },
+              { icon: Briefcase, title: 'Identidad Verificada', desc: 'La plataforma confirma la identidad asociada a tu cuenta' },
             ].map((benefit) => (
               <div key={benefit.title} className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-brand-primary/15 flex items-center justify-center flex-shrink-0 border border-brand-primary/20">

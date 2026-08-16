@@ -13,6 +13,12 @@ import FreightRouteMap from '../common/FreightRouteMap';
 import FreightLogisticsCalculator from '../common/FreightLogisticsCalculator';
 import toast from 'react-hot-toast';
 import { buildProviderPath } from '../../../shared/publicPaths.js';
+import {
+    getAvailabilityLabel,
+    getPricingBasisLabel,
+    parsePublicServiceDescription
+} from '../../../shared/publicContent.js';
+import { trackConversion } from '../../utils/conversionTracking';
 
 interface ServiceDetailPageProps {
     navigateTo: (page: Page, params?: any) => void;
@@ -79,6 +85,16 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                 return [];
                             }
                         })();
+                    const features = Array.isArray(s.features)
+                        ? s.features
+                        : (() => {
+                            try {
+                                const parsed = JSON.parse(s.features || '[]');
+                                return Array.isArray(parsed) ? parsed : [];
+                            } catch {
+                                return [];
+                            }
+                        })();
                     // Adapter: Map Backend to UI
                     const adaptedService = {
                         id: s.id,
@@ -87,15 +103,17 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                             id: s.provider_id,
                             name: s.provider_name || 'Proveedor Verificado',
                             avatar: s.provider_image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-                            rating: 5.0,
-                            reviews: 0,
+                            rating: Number(s.review_count) > 0 ? Number(s.rating ?? s.avg_rating) : null,
+                            reviews: Number(s.review_count) || 0,
                             verified: true,
-                            responseTime: '1 hora'
+                            responseTime: null
                         },
                         description: s.description,
-                        features: ['Garantía de satisfacción', 'Pago Seguro', 'Identidad Verificada'],
+                        features,
                         price: parseFloat(s.price),
-                        duration: 'A convenir',
+                        duration: s.duration_minutes ? `${s.duration_minutes} minutos` : 'A convenir',
+                        durationMinutes: Number(s.duration_minutes) || null,
+                        availabilityType: s.availability_type || '',
                         location: s.coverage_area || s.coverage_region_name || 'Cobertura por confirmar',
                         coverage_region_code: s.coverage_region_code || '',
                         coverage_region_name: s.coverage_region_name || '',
@@ -109,6 +127,7 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                             ? s.image_urls
                             : [],
                         pricing_type: s.pricing_type || 'per_event',
+                        updatedAt: s.updated_at ? String(s.updated_at).slice(0, 10) : null,
                         // Freight fields
                         freight_base_price: s.freight_base_price ? parseFloat(s.freight_base_price) : null,
                         freight_price_per_km: s.freight_price_per_km ? parseFloat(s.freight_price_per_km) : null,
@@ -245,6 +264,11 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
             toast.error('Por favor selecciona una fecha y al menos una hora.');
             return;
         }
+        trackConversion('service_booking_start', {
+            serviceId: service.id,
+            serviceType: service.type,
+            bookingType: 'scheduled'
+        });
         navigateTo('checkout', {
             service: service,
             booking: { date: selectedDate, times: selectedTimes }
@@ -281,6 +305,11 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
             toast.error('Completa la ruta y selecciona un plan de logística.');
             return;
         }
+        trackConversion('service_booking_start', {
+            serviceId: service.id,
+            serviceType: service.type,
+            bookingType: 'freight'
+        });
         navigateTo('checkout', {
             service: service,
             booking: { date: new Date().toISOString().split('T')[0], times: ['a_convenir'] },
@@ -335,6 +364,9 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
 
     // Determine main display: cover image or video
     const mainImageUrl = service?.coverImageUrl || service?.images?.[0] || null;
+    const parsedDescription = parsePublicServiceDescription(service?.description);
+    const pricingBasis = getPricingBasisLabel(service?.pricing_type, service?.durationMinutes);
+    const availabilitySummary = getAvailabilityLabel(service?.availabilityType);
 
     if (loading) {
         return <div className="min-h-screen flex items-center justify-center bg-gray-50"><p>Cargando servicio...</p></div>;
@@ -372,6 +404,7 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                     <VideoPlayer
                                         url={service.videoUrl}
                                         poster={mainImageUrl}
+                                        title={`Video de ${service.title}`}
                                     />
                                 ) : mainImageUrl ? (
                                     <img
@@ -445,9 +478,11 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                     </div>
                                 </div>
                                 <div className="flex items-center mt-4 space-x-4 text-sm">
-                                    <div className="flex items-center text-yellow-500 font-bold">
-                                        <StarIcon className="h-5 w-5 fill-current mr-1" /> {service.provider.rating} <span className="text-gray-500 font-normal ml-1 underline decoration-dotted">({service.provider.reviews} reseñas)</span>
-                                    </div>
+                                    {service.provider.rating !== null && service.provider.reviews > 0 && (
+                                        <div className="flex items-center text-yellow-500 font-bold">
+                                            <StarIcon className="h-5 w-5 fill-current mr-1" /> {service.provider.rating} <span className="text-gray-500 font-normal ml-1 underline decoration-dotted">({service.provider.reviews} reseñas)</span>
+                                        </div>
+                                    )}
                                     <div className="flex items-center text-gray-600">
                                         <MapPin size={16} className="mr-1" /> {service.location}
                                     </div>
@@ -482,17 +517,59 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                         {/* Description */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h2 className="text-xl font-bold text-gray-900 mb-4">Acerca de este servicio</h2>
-                            <p className="text-gray-700 whitespace-pre-line leading-relaxed">{service.description}</p>
+                            <div className="space-y-6 text-gray-700">
+                                {parsedDescription.sections.length > 0 ? parsedDescription.sections.map((section: any, sectionIndex: number) => (
+                                    <section key={`${section.heading}-${sectionIndex}`}>
+                                        <h3 className="font-semibold text-gray-900">{section.heading}</h3>
+                                        {section.paragraphs.map((paragraph: string, index: number) => (
+                                            <p key={index} className="mt-2 leading-relaxed">{paragraph}</p>
+                                        ))}
+                                        {section.items.length > 0 && (
+                                            <ul className="mt-2 list-disc space-y-1 pl-5">
+                                                {section.items.map((item: string, index: number) => <li key={index}>{item}</li>)}
+                                            </ul>
+                                        )}
+                                    </section>
+                                )) : <p>El proveedor aún no ha agregado una descripción editorial completa.</p>}
+                            </div>
 
-                            <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-3">¿Qué incluye?</h3>
-                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {service.features.map((feature: string, idx: number) => (
-                                    <li key={idx} className="flex items-center text-gray-700">
-                                        <Check size={16} className="text-green-500 mr-2 flex-shrink-0" />
-                                        {feature}
-                                    </li>
-                                ))}
-                            </ul>
+                            {service.features.length > 0 && (
+                                <section className="mt-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 mb-3">¿Qué incluye?</h3>
+                                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {service.features.map((feature: string, idx: number) => (
+                                            <li key={idx} className="flex items-center text-gray-700">
+                                                <Check size={16} className="text-green-500 mr-2 flex-shrink-0" />
+                                                {feature}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            )}
+
+                            <div className="mt-6 grid gap-5 md:grid-cols-2">
+                                <section>
+                                    <h3 className="font-semibold text-gray-900">Base del precio</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-600">{pricingBasis}</p>
+                                </section>
+                                <section>
+                                    <h3 className="font-semibold text-gray-900">Cobertura y disponibilidad</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-600">{service.location}. {availabilitySummary}</p>
+                                </section>
+                                <section>
+                                    <h3 className="font-semibold text-gray-900">¿Qué no incluye?</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-600">Cualquier prestación, material o traslado no descrito debe confirmarse con el proveedor antes de reservar.</p>
+                                </section>
+                                <section>
+                                    <h3 className="font-semibold text-gray-900">Condiciones y cancelación</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-600">Revisa los <Link to="/legal/terminos-y-condiciones-de-uso" className="text-brand-primary underline">términos de uso</Link> antes de confirmar.</p>
+                                </section>
+                            </div>
+
+                            <p className="mt-6 rounded-lg bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                                La verificación confirma la identidad asociada a la cuenta; no certifica títulos, especialidades ni resultados. Confirma antecedentes cuando corresponda.
+                            </p>
+                            {service.updatedAt && <p className="mt-4 text-xs text-gray-500">Información actualizada: {service.updatedAt}</p>}
                         </div>
 
                         {/* Reviews */}
@@ -505,7 +582,7 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
 
                     {/* Right Column: Booking Widget (Sticky) */}
                     <div className="lg:col-span-1">
-                        <div className="sticky top-24 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                        <div id="reservar" className="sticky top-24 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                             <div className="p-6">
 
                                 {/* ======= FREIGHT BOOKING FLOW ======= */}
@@ -633,6 +710,7 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                                     <button
                                                         onClick={handleFreightBook}
                                                         className="flex-1 bg-brand-primary hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center"
+                                                        data-analytics-event="service_booking_start"
                                                     >
                                                         <Truck size={18} className="mr-2" /> Reservar Flete
                                                     </button>
@@ -700,6 +778,7 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                 <button
                                     onClick={handleBook}
                                     disabled={!selectedDate || selectedTimes.length === 0}
+                                    data-analytics-event="service_booking_start"
                                     className="w-full bg-brand-primary hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center"
                                 >
                                     Reservar Ahora <ArrowRight size={18} className="ml-2" />
@@ -722,9 +801,9 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ navigateTo, servi
                                 <div className="flex items-start">
                                     <ShieldCheck size={18} className="text-brand-secondary mt-0.5 mr-2 flex-shrink-0" />
                                     <div>
-                                        <h4 className="text-sm font-bold text-gray-900">Pago en Custodia (Escrow)</h4>
+                                        <h4 className="text-sm font-bold text-gray-900">Pago y liberación controlados</h4>
                                         <p className="text-xs text-gray-600 mt-1">
-                                            Tu dinero está seguro con Serviciosatuhogar. El proveedor solo recibe el pago cuando confirmas que el trabajo está terminado.
+                                            El pago se procesa según el estado de la reserva y las condiciones informadas. Revisa los <Link to="/legal/terminos-y-condiciones-de-uso" className="underline">términos de uso</Link> antes de confirmar.
                                         </p>
                                     </div>
                                 </div>

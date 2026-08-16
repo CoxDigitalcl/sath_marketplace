@@ -241,10 +241,13 @@ const ProviderPublicProfile: React.FC<ProviderPublicProfileProps> = ({ providerI
                                         <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Re-contratación</p>
                                     </div>
                                     <div className="text-center md:text-left border-l md:pl-6 border-gray-200">
-                                        <div className="font-bold text-xl text-gray-900 flex items-center justify-center md:justify-start"><Clock size={18} className="mr-1 text-gray-400" /> {providerData.stats.responseTime || '1 hora'}</div>
+                                        <div className="font-bold text-xl text-gray-900 flex items-center justify-center md:justify-start"><Clock size={18} className="mr-1 text-gray-400" /> {providerData.stats.responseTime || 'N/D'}</div>
                                         <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Tiempo Resp.</p>
                                     </div>
                                 </div>
+                                <p className="mt-5 rounded-lg bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                                    La verificación confirma la identidad asociada a la cuenta; no certifica títulos, especialidades ni resultados. Confirma antecedentes cuando corresponda.
+                                </p>
                             </div>
                         </div>
                     </div>

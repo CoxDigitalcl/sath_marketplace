@@ -282,6 +282,13 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** hacer que las páginas sean comprensibles, citables y útiles después de una respuesta generada por IA.
 
+**Estado técnico al 2026-08-15:** remediación implementada localmente en tres bloques.
+
+- **6A — Integridad y confianza:** métricas simuladas eliminadas; ratings solo con reseñas reales; claims, garantías y tiempos no verificables retirados.
+- **6B — Capa semántica:** grafo JSON-LD seguro con IDs estables, categorías vacías en `noindex` y sitemap limitado a oferta pública activa.
+- **6C — Contenido y conversión:** descripciones renderizadas sin Markdown crudo, plantilla editorial ampliada, alcance de verificación visible, CTA trazable sin PII y soporte de transcripción.
+- **Pendiente para aprobar el gate:** revisión final del dueño/asesoría legal, completar contenido faltante de los servicios y aportar transcripciones reales cuando existan videos relevantes; después del deploy corresponde el smoke HTTP de producción.
+
 **Trabajo**
 
 - Definir grafo JSON-LD con IDs estables: `Organization`, `WebSite`, `BreadcrumbList`, `Service` y `Offer` solo con datos reales.

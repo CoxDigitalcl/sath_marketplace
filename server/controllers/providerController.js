@@ -783,9 +783,16 @@ export const getAllProviders = async (req, res, next) => {
                 pp.coverage_communes,
                 pp.bio as tagline,
                 pp.is_verified as verified,
-                pp.payouts_enabled
+                pp.payouts_enabled,
+                review_stats.avg_rating,
+                review_stats.review_count
             FROM users u
             JOIN provider_profiles pp ON u.id = pp.user_id
+            LEFT JOIN LATERAL (
+                SELECT AVG(r.rating)::numeric AS avg_rating, COUNT(r.id)::integer AS review_count
+                FROM reviews r
+                WHERE r.provider_id = u.id
+            ) review_stats ON true
             WHERE u.role = 'provider' AND pp.is_verified = TRUE AND COALESCE(u.is_blocked, FALSE) = FALSE
             ORDER BY u.created_at DESC
         `;
@@ -807,16 +814,16 @@ export const getAllProviders = async (req, res, next) => {
                 coverage_region_name: coverage.coverage_region_name,
                 coverage_communes: coverage.coverage_communes,
                 coverage_area: coverage.coverage_area,
-                rating: 5.0, // Mock
-                reviews: 0, // Mock
+                rating: Number(row.review_count) > 0
+                    ? Number(Number(row.avg_rating).toFixed(1))
+                    : null,
+                reviews: Number(row.review_count) || 0,
                 tagline: row.tagline ? row.tagline.substring(0, 60) + '...' : 'Proveedor de Servicios',
                 verified: row.verified,
                 status: 'Activo'
                 // Financial settlement state is intentionally private.
             };
         });
-
-        console.log("DEBUG: Providers List", providers.map(p => ({ id: p.id, name: p.name, verified: p.verified, status: p.status })));
 
         res.json({
             status: 'success',
@@ -944,7 +951,7 @@ export const getPublicProviderProfile = async (req, res, next) => {
         const stats = {
             jobsCompleted,
             repeatHires: repeatHiresPercent, // null if no data
-            responseTime: '1 hora' // This could be calculated from message response times in future
+            responseTime: null
         };
 
         debugStep = 'response_build';
@@ -960,7 +967,7 @@ export const getPublicProviderProfile = async (req, res, next) => {
                 coverage_communes: coverage.coverage_communes,
                 coverage_area: coverage.coverage_area,
                 joinedDate: profile.joined_date ? new Date(profile.joined_date).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) : 'Reciente',
-                responseTime: '1 hora',
+                responseTime: null,
                 rating: avgRating ? parseFloat(avgRating) : null,
                 reviewsCount: reviewCount,
                 verified: profile.is_verified || false,

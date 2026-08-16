@@ -520,6 +520,7 @@ export const getServices = async (req, res, next) => {
         let query = `
             SELECT s.*, p.full_name as provider_name, p.coverage_area as location,
                    p.coverage_region_code, p.coverage_region_name, p.coverage_communes,
+                   review_stats.avg_rating, review_stats.review_count,
                    lp.payment_status, lp.start_date as promotion_start_date,
                    lp.target_keywords,
                    (lp.payment_status = 'PAID') as is_sponsored,
@@ -529,6 +530,11 @@ export const getServices = async (req, res, next) => {
             FROM services s 
             JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
+            LEFT JOIN LATERAL (
+                SELECT AVG(r.rating)::numeric AS avg_rating, COUNT(r.id)::integer AS review_count
+                FROM reviews r
+                WHERE r.service_id = s.id
+            ) review_stats ON true
             LEFT JOIN LATERAL (
                 SELECT sp.payment_status, sp.start_date, sp.end_date, sp.target_keywords
                 FROM featured_promotions sp 
@@ -602,7 +608,10 @@ export const getServices = async (req, res, next) => {
             count: result.rows.length,
             services: result.rows.map(row => toPublicServiceDto({
                 ...row,
-                isSponsored: !!row.is_sponsored // Convert to boolean for frontend
+                isSponsored: !!row.is_sponsored,
+                rating: Number(row.review_count) > 0
+                    ? Number(Number(row.avg_rating).toFixed(1))
+                    : null
             })),
             pagination: {
                 page: pageNumber,
@@ -638,12 +647,19 @@ export const getServiceById = async (req, res, next) => {
                    p.coverage_communes,
                    p.profile_image_url as provider_image,
                    p.user_id as provider_id,
+                   review_stats.avg_rating,
+                   review_stats.review_count,
                    COALESCE(sc.commission_percentage, 10) as commission_percentage,
                    COALESCE(sc.commission_type, 'PERCENTAGE') as commission_type,
                    COALESCE(sc.fixed_commission, 0) as fixed_commission
             FROM services s 
             JOIN provider_profiles p ON s.provider_id = p.user_id JOIN users u ON s.provider_id = u.id
             LEFT JOIN service_categories sc ON s.category = sc.id
+            LEFT JOIN LATERAL (
+                SELECT AVG(r.rating)::numeric AS avg_rating, COUNT(r.id)::integer AS review_count
+                FROM reviews r
+                WHERE r.service_id = s.id
+            ) review_stats ON true
             WHERE s.id = $1 AND s.is_active = true AND s.moderation_status = 'approved' AND p.is_verified = true AND COALESCE(u.is_blocked, false) = false
         `;
         const result = await pool.query(query, [id]);
@@ -654,7 +670,12 @@ export const getServiceById = async (req, res, next) => {
 
         res.json({
             status: 'success',
-            service: toPublicServiceDto(result.rows[0])
+            service: toPublicServiceDto({
+                ...result.rows[0],
+                rating: Number(result.rows[0].review_count) > 0
+                    ? Number(Number(result.rows[0].avg_rating).toFixed(1))
+                    : null
+            })
         });
     } catch (err) {
         next(err);

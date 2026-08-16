@@ -82,6 +82,10 @@ const fakeDb = {
                 };
             }
 
+            if (/SELECT DISTINCT s\.category/.test(sql)) {
+                return { rows: [{ category: 'hogar' }, { category: 'categoria-interna' }] };
+            }
+
             if (/SELECT\s+s\.id,\s+s\.title\s+FROM services s/.test(sql) && params.length === 0) {
                 assert.match(sql, /s\.is_active = TRUE/);
                 assert.match(sql, /s\.moderation_status = 'approved'/);
@@ -271,6 +275,7 @@ test('public shell has canonical metadata and short-lived HTML caching', async (
 test('private, transactional, search, and tokenized routes emit noindex headers', async () => {
     const loginResponse = await fetch(`${baseUrl}/login?token=secret`);
     const loginHtml = await loginResponse.text();
+    assert.equal(loginHtml.includes('seo-structured-data'), false);
     assert.equal(loginResponse.status, 200);
     assert.equal(loginResponse.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
     assert.equal(loginHtml.includes('rel="canonical"'), false);
@@ -325,6 +330,9 @@ test('service metadata is emitted only for an approved public service', async ()
     assert.equal(response.headers.get('x-robots-tag'), 'index, follow');
     assert.match(html, /Gasfitería &lt;urgente&gt; \| Servicios a tu Hogar/);
     assert.match(html, /https:\/\/serviciosatuhogar\.cl\/uploads\/service-photo\.webp/);
+    assert.match(html, /<script id="seo-structured-data" type="application\/ld\+json">/);
+    assert.match(html, /"@type":"Service"/);
+    assert.doesNotMatch(html, /AggregateRating|ratingValue/);
     assert.match(html, /<h1[^>]*>Gasfitería &lt;urgente&gt;<\/h1>/);
     assert.match(html, /Reparación segura de filtraciones y artefactos\./);
     assert.match(html, /\$45\.000/);

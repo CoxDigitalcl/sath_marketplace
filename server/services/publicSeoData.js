@@ -134,10 +134,14 @@ export const loadPublicServiceSeo = async (db, id) => {
             s.duration_minutes,
             s.type,
             s.pricing_type,
+            s.category,
             s.image_urls,
+            s.availability_type,
+            s.features,
             s.cover_image_url,
             COALESCE(pp.store_name, pp.full_name, 'Proveedor') AS provider_name,
             pp.coverage_area,
+            s.updated_at,
             pp.coverage_region_name
         FROM services s
         JOIN provider_profiles pp ON pp.user_id = s.provider_id
@@ -275,7 +279,7 @@ export const loadPublicPolicySeo = async (db, slug) => {
 
 export const loadPublicDynamicSitemapPaths = async (db) => {
     const query = getQuery(db);
-    const [servicesResult, providersResult, policies] = await Promise.all([
+    const [servicesResult, providersResult, categoriesResult, policies] = await Promise.all([
         query(`
             SELECT s.id, s.title
             FROM services s
@@ -299,6 +303,17 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
             ORDER BY pp.user_id
             LIMIT 20000
         `),
+        query(`
+            SELECT DISTINCT s.category
+            FROM services s
+            JOIN provider_profiles pp ON pp.user_id = s.provider_id
+            JOIN users u ON u.id = s.provider_id
+            WHERE s.is_active = TRUE
+              AND s.moderation_status = 'approved'
+              AND pp.is_verified = TRUE
+              AND COALESCE(u.is_blocked, FALSE) = FALSE
+            ORDER BY s.category
+        `),
         loadPublicPolicies(db)
     ]);
 
@@ -309,6 +324,9 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
         ...providersResult.rows
             .filter((row) => isValidUuid(row.id))
             .map((row) => buildProviderPath(row.id, row.name)),
+        ...categoriesResult.rows
+            .filter((row) => getPublicCategory(row.category))
+            .map((row) => `/categories/${row.category}`),
         ...policies.map((policy) => `/legal/${policy.slug}`)
     ];
 

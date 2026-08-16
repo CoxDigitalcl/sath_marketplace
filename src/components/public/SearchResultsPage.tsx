@@ -228,8 +228,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ navigateTo }) => 
                             provider: s.provider_name || 'Proveedor',
                             provider_name: s.provider_name,
                             providerId: s.provider_id,
-                            rating: 5.0, // Mock
-                            reviews: 0,
+                            rating: Number(s.review_count) > 0 ? Number(s.rating ?? s.avg_rating) : null,
+                            reviews: Number(s.review_count) || 0,
                             price: typeof s.price === 'string' ? parseFloat(s.price) : s.price,
                             priceUnit: s.price_unit || '',
                             categoryId: s.category,
@@ -447,7 +447,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ navigateTo }) => 
                                 <option>Relevancia</option>
                                 <option>Precio: Menor a Mayor</option>
                                 <option>Precio: Mayor a Menor</option>
-                                <option>Mejor Calificados</option>
                             </select>
                         </div>
                     </div>

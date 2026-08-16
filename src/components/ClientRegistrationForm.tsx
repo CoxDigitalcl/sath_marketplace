@@ -129,7 +129,7 @@ const ClientRegistrationForm: React.FC<ClientRegistrationFormProps> = ({ navigat
             </div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Crea tu cuenta</h1>
             <p className="mt-2 text-gray-500 text-[15px]">
-              Encuentra los mejores profesionales para las necesidades de tu hogar.
+              Encuentra servicios publicados por proveedores para las necesidades de tu hogar.
             </p>
           </div>
 
@@ -245,17 +245,17 @@ const ClientRegistrationForm: React.FC<ClientRegistrationFormProps> = ({ navigat
               Tu hogar<br />merece lo<br />mejor.
             </h2>
             <p className="text-white/80 text-lg max-w-sm leading-relaxed">
-              Accede a una red de profesionales verificados listos para resolver cualquier necesidad de tu hogar.
+              Accede a servicios publicados por proveedores cuya identidad ha sido verificada por la plataforma.
             </p>
           </div>
 
           {/* Features list */}
           <div className="space-y-4">
             {[
-              'Profesionales verificados con KYC',
-              'Pagos seguros con garantía',
-              'Soporte dedicado 24/7',
-              'Sin costos ocultos',
+              'Identidad del proveedor verificada',
+              'Pago registrado en la plataforma',
+              'Condiciones visibles antes de reservar',
+              'Historial de reservas en tu cuenta',
             ].map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">

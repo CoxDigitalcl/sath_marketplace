@@ -1070,12 +1070,10 @@ const AttributeSettings = () => {
     const [inclusions, setInclusions] = useState<ServiceAttribute[]>([
         { id: '1', label: "Trae sus propios materiales", description: "El proveedor incluye todos los insumos necesarios para realizar el trabajo." },
         { id: '2', label: "Factura disponible", description: "El proveedor puede emitir factura electrónica afecta a IVA." },
-        { id: '3', label: "Garantía de satisfacción", description: "Si no quedas conforme, el proveedor volverá a realizar el trabajo sin costo." },
         { id: '4', label: "Pet Friendly", description: "El proveedor utiliza productos seguros para mascotas o se siente cómodo trabajando con ellas cerca." },
         { id: '5', label: "Servicio Express", description: "Disponibilidad para realizar el servicio en menos de 24 horas." },
         { id: '6', label: "Habla Inglés", description: "El proveedor puede comunicarse fluidamente en inglés." },
         { id: '7', label: "Transporte incluido", description: "El precio incluye los costos de traslado dentro de la zona de cobertura." },
-        { id: '8', label: "Seguro contra daños", description: "El servicio cuenta con un seguro de responsabilidad civil." }
     ]);
     const [newInclusion, setNewInclusion] = useState({ label: '', description: '' });
 
@@ -1152,19 +1150,27 @@ const AttributeSettings = () => {
 
 // --- Sub-componente: Plantillas de Descripción ---
 const ContentTemplatesSettings = () => {
-    const [serviceTemplate, setServiceTemplate] = useState(`**Resumen del servicio:**
-[Describe brevemente en qué consiste tu servicio y qué problema resuelves]
+    const [serviceTemplate, setServiceTemplate] = useState(`**Resumen breve:**
+[Explica qué problema resuelves y para quién es el servicio]
 
-**Características principales:**
-- [Característica 1]
-- [Característica 2]
-- [Característica 3]
+**Qué incluye:**
+- [Prestación o material incluido 1]
+- [Prestación o material incluido 2]
+
+**Qué no incluye:**
+- [Prestación, material o traslado no incluido]
+
+**Base y factores del precio:**
+[Explica qué cubre el precio publicado y qué puede modificarlo]
 
 **Requisitos previos:**
-[Lo que necesitas que el cliente tenga listo antes de tu llegada]
+[Indica qué debe tener listo el cliente]
 
-**Garantía:**
-[Detalles sobre tu garantía de satisfacción]`);
+**Cobertura y disponibilidad:**
+[Indica comunas, modalidad y tiempos de atención]
+
+**Condiciones y cancelación:**
+[Explica las condiciones aplicables y cómo se gestiona una cancelación]`);
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">

@@ -30,7 +30,7 @@ test('public services use an allowlisted DTO and verified, unblocked providers',
     const controller = read('server/controllers/serviceController.js');
     const providerController = read('server/controllers/providerController.js');
 
-    assert.match(controller, /toPublicServiceDto\(result\.rows\[0\]\)/);
+    assert.match(controller, /service:\s*toPublicServiceDto\(\{\s*\.\.\.result\.rows\[0\],/);
     assert.match(controller, /result\.rows\.map\(row => toPublicServiceDto\(/);
     assert.match(controller, /p\.is_verified = true AND COALESCE\(u\.is_blocked, false\) = false/);
     assert.match(providerController, /pp\.is_verified = TRUE AND COALESCE\(u\.is_blocked, FALSE\) = FALSE/);

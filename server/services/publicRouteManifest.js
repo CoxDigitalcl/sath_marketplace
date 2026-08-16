@@ -14,6 +14,11 @@ import {
     PUBLIC_SLUG_PATTERN_SOURCE,
     PUBLIC_UUID_PATTERN_SOURCE
 } from '../../shared/publicPaths.js';
+import {
+    getAvailabilityLabel,
+    getPricingBasisLabel,
+    parsePublicServiceDescription
+} from '../../shared/publicContent.js';
 
 const PUBLIC_DETAIL_SEGMENT = `(?:(${PUBLIC_SLUG_PATTERN_SOURCE})-)?(${PUBLIC_UUID_PATTERN_SOURCE})`;
 const CATEGORY_SEGMENT = PUBLIC_SLUG_PATTERN_SOURCE;
@@ -162,7 +167,7 @@ const publicDefinitions = [
         renderMode: 'ssr',
         indexable: true,
         sitemap: true,
-        staticSitemapPaths: PUBLIC_CATEGORIES.map((category) => `/categories/${category.slug}`),
+        staticSitemapPaths: [],
         match: createMatcher(new RegExp(`^/categories/(${CATEGORY_SEGMENT})$`), ['slug']),
         load: async ({ db, params }) => {
             const category = getPublicCategory(params.slug);
@@ -174,6 +179,7 @@ const publicDefinitions = [
         },
         build: ({ pathname, data }) => ({
             status: 200,
+            indexable: data.services.length > 0,
             canonical: makeCanonical(pathname),
             seo: {
                 title: `${data.category.name} | Servicios a tu Hogar`,
@@ -204,8 +210,9 @@ const publicDefinitions = [
         load: ({ db, params }) => loadPublicServiceSeo(db, params.id),
         build: ({ pathname, data }) => {
             const title = normalizeSingleLine(data.title) || 'Detalle del servicio';
-            const description = normalizeSingleLine(data.description)
-                || `Revisa el detalle y la cobertura del servicio ofrecido por ${normalizeSingleLine(data.provider_name) || 'un proveedor verificado'}.`;
+            const parsedDescription = parsePublicServiceDescription(data.description);
+            const description = parsedDescription.plainText
+                || `Revisa el detalle y la cobertura del servicio ofrecido por ${normalizeSingleLine(data.provider_name) || 'un proveedor con identidad verificada'}.`;
             const firstImage = data.cover_image_url || parseImageList(data.image_urls).find(Boolean);
             const providerName = normalizeSingleLine(data.provider_name) || 'Proveedor verificado';
             const canonicalPath = buildServicePath(data.id, title);
@@ -214,6 +221,7 @@ const publicDefinitions = [
             }
             return {
                 status: 200,
+                indexable: true,
                 canonical: makeCanonical(canonicalPath),
                 seo: {
                     title: `${title} | Servicios a tu Hogar`,
@@ -226,9 +234,21 @@ const publicDefinitions = [
                     heading: title,
                     description: description.slice(0, 220),
                     fullDescription: description,
+                    descriptionSections: parsedDescription.sections,
+                    price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+                    priceCurrency: 'CLP',
                     priceLabel: formatPrice(data.price),
                     scope: getScope(data),
                     serviceType: normalizeSingleLine(data.type),
+                    category: normalizeSingleLine(data.category),
+                    pricingType: normalizeSingleLine(data.pricing_type),
+                    availabilityType: normalizeSingleLine(data.availability_type),
+                    durationMinutes: Number(data.duration_minutes) || null,
+                    pricingBasis: getPricingBasisLabel(data.pricing_type, data.duration_minutes),
+                    availabilitySummary: getAvailabilityLabel(data.availability_type),
+                    features: parseImageList(data.features).map(normalizeSingleLine).filter(Boolean),
+                    lastUpdated: data.updated_at ? String(data.updated_at).slice(0, 10) : null,
+                    termsHref: '/legal/terminos-y-condiciones-de-uso',
                     provider: {
                         name: providerName,
                         href: buildProviderPath(data.provider_id, providerName)

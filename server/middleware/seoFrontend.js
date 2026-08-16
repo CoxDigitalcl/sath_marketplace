@@ -18,6 +18,7 @@ import {
     resolveApplicationRoute
 } from '../services/publicRouteManifest.js';
 import { injectPublicSsr } from '../ssr/entryServer.js';
+import { buildPublicStructuredData } from '../services/structuredData.js';
 
 const NOINDEX = 'noindex, nofollow, noarchive';
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.ogg']);
@@ -40,7 +41,8 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
         status = 200,
         overrides = {},
         forceNoindex = false,
-        ssrPage = null
+        ssrPage = null,
+        structuredData = null
     } = {}) => {
         let html;
         try {
@@ -55,6 +57,7 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             overrides,
             forceNoindex: forceNoindex || status >= 400
         });
+        if (structuredData) seo.structuredData = structuredData;
 
         try {
             html = injectSeoMetadata(html, seo);
@@ -159,7 +162,9 @@ export const createSeoFrontendRouter = ({ buildPath, db, indexHtml } = {}) => {
             return sendSpaShell(req, res, {
                 status: document.status,
                 overrides: document.seo,
-                ssrPage: document.page
+                forceNoindex: document.indexable === false,
+                ssrPage: document.page,
+                structuredData: buildPublicStructuredData({ document, siteOrigin })
             });
         } catch (error) {
             logger.error('Public SSR loader failed.', {

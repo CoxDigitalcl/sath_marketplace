@@ -141,6 +141,7 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({ items, initialIndex = 0, 
                             key={currentItem.url}
                             url={currentItem.url}
                             autoPlay={true}
+                            title={`Video multimedia ${currentIndex + 1}`}
                         />
                     </div>
                 )}
