@@ -290,7 +290,7 @@ export const getTransactions = async (req, res, next) => {
             const provider_payout_clp = total_clp - platform_commission_clp - sii_retention_clp;
 
             // Status Mapping
-            let status = 'PENDING_PAYMENT';
+            let status;
             let payout_status = 'NONE';
             let refund_status = 'NONE';
 

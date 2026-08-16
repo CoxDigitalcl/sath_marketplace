@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { FreightVehicle } from '../../types';
+import type { FreightVehicle } from '../../../types';
 
 interface FreightVehicleManagerProps {
   vehicles: FreightVehicle[];

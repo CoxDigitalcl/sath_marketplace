@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint": "eslint src server app.js vite.config.ts eslint.config.js",
+    "typecheck": "tsc --noEmit",
+    "check:ci": "npm run lint && npm run typecheck && npm run security:secrets && npm run validate:migrations && npm run test:serial && npm run build && npm run performance:budget && npm audit --audit-level=high",
     "build": "vite build",
     "preview": "vite preview",
     "test:coverage-location": "node --test server/tests/locationCoverage.test.js",
@@ -13,6 +16,8 @@
     "test:serial": "node --test --test-concurrency=1 server/tests/*.test.js",
     "security:migrate-private-uploads": "node server/scripts/migrate_private_uploads.js",
     "security:migrate-sessions": "node server/scripts/run_session_security_migration.js",
+    "security:secrets": "node server/scripts/check_stage7_secrets.js",
+    "validate:migrations": "node server/scripts/check_stage7_migrations.js",
     "seo:close-stage5b-content": "node server/scripts/close_stage5b_content_gate.js",
     "performance:budget": "node server/scripts/check_stage5c_performance_budget.js",
     "verify:stage5c": "npm run build && npm run performance:budget && npm run test:serial"
@@ -54,13 +59,17 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.23",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.1",
     "typescript": "~5.8.2",
+    "typescript-eslint": "^8.67.0",
     "vite": "^6.2.0"
   }
 }

@@ -217,7 +217,11 @@ const FreightRouteMap: React.FC<FreightRouteMapProps> = ({
     (query: string, type: 'origin' | 'dest') => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
       if (query.length < 3) {
-        type === 'origin' ? setOriginResults([]) : setDestResults([]);
+        if (type === 'origin') {
+          setOriginResults([]);
+        } else {
+          setDestResults([]);
+        }
         return;
       }
 

@@ -129,7 +129,7 @@ test('browser session no longer persists auth credentials in localStorage and im
     assert.match(sources, /ImpersonationBanner/);
     assert.match(sources, /sessionStorage/);
     assert.doesNotMatch(sources, /window\.prompt/);
-    assert.match(sources, /type=\"password\"/);
+    assert.match(sources, /type="password"/);
     assert.match(sources, /beginImpersonation/);
     assert.match(sources, /returnToAdmin/);
 });

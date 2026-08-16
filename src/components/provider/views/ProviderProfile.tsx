@@ -23,7 +23,7 @@ const validateChileanRut = (rut: string): boolean => {
     }
     
     const remainder = 11 - (sum % 11);
-    let expectedDv = remainder === 11 ? '0' : remainder === 10 ? 'K' : remainder.toString();
+    const expectedDv = remainder === 11 ? '0' : remainder === 10 ? 'K' : remainder.toString();
     
     return dv === expectedDv;
 };
@@ -259,7 +259,7 @@ const ProviderProfile: React.FC = () => {
         let finalValue = value;
         // Auto-formateo del RUT
         if (name === 'rut') {
-            let cleanRut = value.replace(/[^0-9kK]/g, '');
+            const cleanRut = value.replace(/[^0-9kK]/g, '');
             if (cleanRut.length > 0) {
                 const dv = cleanRut.slice(-1).toUpperCase();
                 let body = cleanRut.slice(0, -1);

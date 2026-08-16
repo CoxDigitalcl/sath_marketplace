@@ -300,6 +300,13 @@ export const loadPublicDynamicSitemapPaths = async (db) => {
             WHERE u.role = 'provider'
               AND pp.is_verified = TRUE
               AND COALESCE(u.is_blocked, FALSE) = FALSE
+              AND EXISTS (
+                  SELECT 1
+                  FROM services s
+                  WHERE s.provider_id = pp.user_id
+                    AND s.is_active = TRUE
+                    AND s.moderation_status = 'approved'
+              )
             ORDER BY pp.user_id
             LIMIT 20000
         `),

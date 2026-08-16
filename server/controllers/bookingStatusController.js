@@ -121,7 +121,7 @@ export const updateBookingStatus = async (req, res, next) => {
             booking: updateResult.rows[0],
         });
     } catch (error) {
-        try { await client.query('ROLLBACK'); } catch {}
+        try { await client.query('ROLLBACK'); } catch { /* Best-effort rollback. */ }
         return next(error);
     } finally {
         client.release();

@@ -282,12 +282,13 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** hacer que las páginas sean comprensibles, citables y útiles después de una respuesta generada por IA.
 
-**Estado técnico al 2026-08-15:** remediación implementada localmente en tres bloques.
+**Estado técnico al 2026-08-15:** remediación desplegada en tres bloques; hotfix posterior implementado y validado localmente, pendiente de commit/deploy y smoke HTTP final.
 
 - **6A — Integridad y confianza:** métricas simuladas eliminadas; ratings solo con reseñas reales; claims, garantías y tiempos no verificables retirados.
 - **6B — Capa semántica:** grafo JSON-LD seguro con IDs estables, categorías vacías en `noindex` y sitemap limitado a oferta pública activa.
 - **6C — Contenido y conversión:** descripciones renderizadas sin Markdown crudo, plantilla editorial ampliada, alcance de verificación visible, CTA trazable sin PII y soporte de transcripción.
-- **Pendiente para aprobar el gate:** revisión final del dueño/asesoría legal, completar contenido faltante de los servicios y aportar transcripciones reales cuando existan videos relevantes; después del deploy corresponde el smoke HTTP de producción.
+- **Hotfix de cierre:** los resúmenes SSR usan texto plano y los proveedores sin oferta pública quedan en `noindex` y fuera del sitemap.
+- **Pendiente para aprobar el gate:** desplegar y ejecutar el smoke HTTP del hotfix; revisión final del dueño/asesoría legal, completar contenido faltante de los servicios y aportar transcripciones reales cuando existan videos relevantes.
 
 **Trabajo**
 
@@ -321,6 +322,8 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 ### Etapa 7 — CI, observabilidad, medición y lanzamiento escalonado
 
 **Propósito:** impedir regresiones y abrir tráfico con capacidad de detectar y revertir fallos.
+
+**Estado de remediación al 2026-08-15:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A está implementada y validada localmente: lint, typecheck, escaneo de secretos, validación de migraciones, 143 pruebas, build, presupuesto y dependency audit; workflow GitHub Actions y secreto CI preparados. Pendiente: commit/push, primera ejecución verde, activar protección de `main` y continuar con 7B. G6 aún no está aprobado.
 
 **Automatización CI**
 
