@@ -86,7 +86,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ### 7A — CI y protección del repositorio
 
-**Estado al 2026-08-15:** implementación local completa y compuerta principal aprobada. El workflow y el secreto `CI_DB_PASSWORD` están preparados; faltan commit/push, primera ejecución verde y protección de `main`.
+**Estado al 2026-08-15:** 7A activada en GitHub. La implementación `b7eb443` pasó `Quality gate` y `Clean schema`; `CI_DB_PASSWORD` está configurado y `main` exige PR y ambos checks, aplica también a administradores, requiere historial lineal y bloquea force-push/deletion. El PR #1 permanece en borrador hasta el merge controlado.
 
 1. Acotar `tsconfig` y añadir scripts `typecheck` y `check:ci`.
 2. Crear GitHub Actions para instalación reproducible, typecheck, build, presupuesto, 143 pruebas seriales y dependency audit.
@@ -112,7 +112,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ## Decisión de gate
 
-**G6: no aprobado todavía.** La implementación local de 7A está completa, pero debe confirmarse con la primera ejecución verde y la protección de `main`. Después permanecen el mínimo operativo de 7B y el rollback ensayado de 7C antes de la apertura pública.
+**G6: no aprobado todavía.** 7A ya tiene checks verdes y protección de `main`. Permanecen el merge/deploy controlado del hotfix, el mínimo operativo de 7B y el rollback ensayado de 7C antes de la apertura pública.
 
 ## Dependencias del dueño
 
