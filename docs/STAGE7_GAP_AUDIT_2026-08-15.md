@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-08-15
 **Alcance:** CI, observabilidad, medición, despliegue gradual y rollback del marketplace Servicios a tu Hogar.
-**Resultado:** la Etapa 7 todavía no cumple G6. La remediación debe comenzar por 7A (CI y control del repositorio).
+**Estado de remediación:** 7A está integrada y desplegada; 7B está implementada localmente y pendiente de publicación/configuración del canal externo. G6 todavía requiere el cierre de 7B y 7C.
 
 ## Resumen ejecutivo
 
@@ -96,6 +96,8 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ### 7B — Observabilidad y medición
 
+**Estado al 2026-08-16:** implementación técnica completada en la rama `codex/stage7b-observability`: logs JSON rotables, redacción, métricas/percentiles, panel administrativo, monitor de DB/disco/cache/outbox y alertas agregadas. Pendiente: commit/PR/deploy y configuración del canal externo por el dueño. Detalle en [STAGE7B_OBSERVABILITY.md](./STAGE7B_OBSERVABILITY.md).
+
 1. Persistir logs JSON con correlation ID, ruta normalizada, status, duración y familia de user-agent.
 2. Medir p50/p95/p99, tasa 5xx/4xx/429, pool DB, disco/uploads, cache y atraso/error del outbox.
 3. Crear alertas agregadas para pago inválido/replay, conflicto de reserva, auth/reset, acciones admin y salud DB.
@@ -112,7 +114,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ## Decisión de gate
 
-**G6: no aprobado todavía.** 7A ya tiene checks verdes y protección de `main`. Permanecen el merge/deploy controlado del hotfix, el mínimo operativo de 7B y el rollback ensayado de 7C antes de la apertura pública.
+**G6: no aprobado todavía.** 7A y el despliegue del hotfix están cerrados. Permanecen publicar/verificar 7B, configurar al menos un canal externo y ensayar el rollback de 7C antes de la apertura pública.
 
 ## Dependencias del dueño
 

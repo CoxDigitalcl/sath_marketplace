@@ -1,31 +1,29 @@
 import { pool } from '../config/db.js';
 import logger from '../config/logger.js';
 import { getStats } from '../services/systemMetricService.js';
+import { collectOperationalSnapshot } from '../services/operationalSnapshotService.js';
+import { stats as getCacheStats } from '../services/cacheService.js';
+import { getAlertStats } from '../services/alertService.js';
 import { createInAppNotification } from './notificationController.js';
 import { ensureBookingPricingColumns, getBookingPricingFromRow } from '../services/commissionService.js';
 
 // GET /api/admin/system-stats
-export const getSystemStats = async (req, res) => {
+export const getSystemStats = async (req, res, next) => {
     try {
-        const stats = getStats();
-        // Check DB Status Realtime
-        let dbStatus = 'disconnected';
-        try {
-            await pool.query('SELECT 1');
-            dbStatus = 'connected';
-        } catch (e) {
-            dbStatus = 'error';
-        }
+        const metrics = getStats();
+        const operational = await collectOperationalSnapshot({ pool, cacheStats: getCacheStats });
 
         res.json({
             status: 'success',
             data: {
-                ...stats,
-                database: dbStatus
-            }
+                ...metrics,
+                database: operational.database.status,
+                operational,
+                alerts: getAlertStats(),
+            },
         });
     } catch (err) {
-        res.status(500).json({ status: 'error', message: err.message });
+        next(err);
     }
 };
 
@@ -68,7 +66,6 @@ export const getAllUsers = async (req, res, next) => {
 export const getProviders = async (req, res, next) => {
     try {
         // DEBUG: Check connection
-        console.log("Admin: Fetching Providers...");
 
         const query = `
             SELECT 

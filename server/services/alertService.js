@@ -1,93 +1,158 @@
 import axios from 'axios';
 import logger from '../config/logger.js';
-import { sendEmail } from './notificationService.js'; // Import Email Service
+import { sendEmail } from './notificationService.js';
 
-// Configuration
-const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-const ENV = process.env.NODE_ENV || 'development';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
-
-export const SEVERITY = {
-    CRITICAL: 'high',  // Red Code
+export const SEVERITY = Object.freeze({
+    CRITICAL: 'critical',
     HIGH: 'high',
-    WARNING: 'warning', // Orange
-    INFO: 'info'       // Blue
+    WARNING: 'warning',
+    INFO: 'info',
+});
+
+const SENSITIVE_KEY = /password|secret|token|authorization|cookie|email|rut|phone|payload|body|ip|address/i;
+
+const redactString = (value) => String(value)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[redacted-ip]')
+    .replace(/(bearer\s+)[^\s]+/gi, '$1[redacted]')
+    .replace(/([?&](?:token|secret|code|key)=)[^&\s]+/gi, '$1[redacted]')
+    .slice(0, 500);
+
+const sanitizeValue = (value, depth = 0) => {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') return redactString(value);
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (depth >= 2) return '[truncated]';
+    if (Array.isArray(value)) return value.slice(0, 10).map((entry) => sanitizeValue(entry, depth + 1));
+    if (typeof value !== 'object') return redactString(value);
+
+    return Object.fromEntries(
+        Object.entries(value)
+            .slice(0, 30)
+            .filter(([key]) => !SENSITIVE_KEY.test(key))
+            .map(([key, entry]) => [key.slice(0, 60), sanitizeValue(entry, depth + 1)])
+    );
 };
 
-/**
- * Sends a rich alert to Discord via Webhook.
- * @param {Error|String} error - The error object or message.
- * @param {Object} context - Additional metadata (e.g., req.path, user.id).
- * @param {String} severity - Level from SEVERITY enum.
- */
-export const notify = async (error, context = {}, severity = SEVERITY.CRITICAL) => {
-    // 1. Silent Log
-    logger.error(`[ALERT] ${severity.toUpperCase()}: ${error.message || error}`, context);
+export const sanitizeAlertContext = (context = {}) => sanitizeValue(context) || {};
 
-    if (severity === SEVERITY.INFO || severity === SEVERITY.WARNING) {
-        // Skip webhook for low severity to reduce noise, unless configured otherwise
-        return;
-    }
+const escapeHtml = (value) => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 
-    try {
-        const message = error.message || error.toString();
-        const stack = error.stack ? error.stack.substring(0, 500) : 'No stack trace'; // Truncate stack
+const positiveInteger = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
 
-        // Discord Embed Color
-        const color = severity === SEVERITY.CRITICAL ? 15548997 : 3447003; // Red or Blue
+export const createAlertService = ({
+    webhookUrl = process.env.DISCORD_WEBHOOK_URL || '',
+    environment = process.env.NODE_ENV || 'development',
+    adminEmail = process.env.ADMIN_EMAIL || '',
+    dedupWindowMs = positiveInteger(process.env.ALERT_DEDUP_WINDOW_MS, 5 * 60 * 1000),
+    now = () => Date.now(),
+    httpClient = axios,
+    sendEmailFn = sendEmail,
+    log = logger,
+} = {}) => {
+    const recentAlerts = new Map();
+    const counters = { received: 0, deduplicated: 0, webhook: 0, email: 0, deliveryFailures: 0 };
 
-        const payload = {
-            username: `SRE Bot - ${ENV.toUpperCase()}`,
-            avatar_url: "https://i.imgur.com/4M34hi2.png",
-            embeds: [
-                {
-                    title: `🚨 ${severity.toUpperCase()} ALERT`,
-                    description: `**Error:** ${message}`,
-                    color: color,
-                    fields: [
-                        { name: "Context", value: `\`\`\`json\n${JSON.stringify(context, null, 2).substring(0, 1000)}\n\`\`\`` },
-                        { name: "Stack Trace", value: `\`\`\`${stack}\n\`\`\`` }
-                    ],
-                    footer: {
-                        text: `Serviciosatuhogar | ${new Date().toISOString()}`
-                    }
-                }
-            ]
-        };
+    const notify = async (error, context = {}, severity = SEVERITY.CRITICAL) => {
+        counters.received += 1;
+        const safeSeverity = Object.values(SEVERITY).includes(severity) ? severity : SEVERITY.HIGH;
+        const safeContext = sanitizeAlertContext(context);
+        const safeMessage = redactString(error?.message || error || 'Operational alert');
+        const alertKey = String(
+            safeContext.alertKey || safeContext.event || safeContext.errorCode || safeContext.component || safeMessage
+        ).slice(0, 180);
+        const fingerprint = `${safeSeverity}:${alertKey}`;
+        const currentTime = now();
+        const previousTime = recentAlerts.get(fingerprint);
 
-        // ... Discord Payload construction ...
+        const logMethod = safeSeverity === SEVERITY.INFO || safeSeverity === SEVERITY.WARNING ? 'warn' : 'error';
+        const writeLog = typeof log?.[logMethod] === 'function' ? log[logMethod].bind(log) : log?.error?.bind(log);
+        writeLog?.('Operational alert observed.', {
+            event: 'operational_alert',
+            severity: safeSeverity,
+            message: safeMessage,
+            ...safeContext,
+        });
 
-        // 2. Dispatch to Discord (Async)
-        const discordPromise = WEBHOOK_URL ? axios.post(WEBHOOK_URL, payload) : Promise.resolve();
-
-        // 3. Dispatch to Email (CRITICAL ONLY)
-        let emailPromise = Promise.resolve();
-        if (severity === SEVERITY.CRITICAL) {
-            const emailHtml = `
-                <h1 style="color:red">🚨 CRITICAL SYSTEM ALERT</h1>
-                <p><strong>Error:</strong> ${message}</p>
-                <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-                <hr/>
-                <h3>Context</h3>
-                <pre>${JSON.stringify(context, null, 2)}</pre>
-                <h3>Stack Trace</h3>
-                <pre>${stack}</pre>
-             `;
-            emailPromise = sendEmail({
-                to: ADMIN_EMAIL,
-                subject: `[CRITICAL] ${message.substring(0, 50)}...`,
-                html: emailHtml
-            });
+        if (previousTime !== undefined && currentTime - previousTime < dedupWindowMs) {
+            counters.deduplicated += 1;
+            return { deduplicated: true, dispatched: { webhook: false, email: false } };
         }
 
-        // Await all dispatches (fail safe)
-        await Promise.allSettled([discordPromise, emailPromise]);
+        recentAlerts.set(fingerprint, currentTime);
+        if (recentAlerts.size > 500) {
+            for (const [key, timestamp] of recentAlerts) {
+                if (currentTime - timestamp >= dedupWindowMs) recentAlerts.delete(key);
+            }
+        }
 
-    } catch (sendError) {
-        // ... error handling ...
-        console.error('FAILED TO SEND DISCORD ALERT:', sendError.message);
-        // Do not throw, finding out the alert failed shouldn't crash the app
-    }
+        if (safeSeverity === SEVERITY.INFO) {
+            return { deduplicated: false, dispatched: { webhook: false, email: false } };
+        }
+
+        const timestamp = new Date(currentTime).toISOString();
+        const payload = {
+            username: `SRE Bot - ${environment.toUpperCase()}`,
+            embeds: [{
+                title: `${safeSeverity.toUpperCase()} ALERT`,
+                description: safeMessage,
+                color: safeSeverity === SEVERITY.CRITICAL ? 15548997 : (safeSeverity === SEVERITY.HIGH ? 15105570 : 16776960),
+                fields: [{ name: 'Context', value: `\`\`\`json\n${JSON.stringify(safeContext, null, 2).slice(0, 1000)}\n\`\`\`` }],
+                footer: { text: `Servicios a tu Hogar | ${timestamp}` },
+            }],
+        };
+        const tasks = [];
+        const channels = [];
+
+        if (webhookUrl) {
+            tasks.push(httpClient.post(webhookUrl, payload));
+            channels.push('webhook');
+        }
+        if (safeSeverity === SEVERITY.CRITICAL && adminEmail) {
+            tasks.push(sendEmailFn({
+                to: adminEmail,
+                subject: `[CRITICAL] ${safeMessage.slice(0, 80)}`,
+                html: `<h1>Alerta crítica</h1><p>${escapeHtml(safeMessage)}</p><p>${escapeHtml(timestamp)}</p><pre>${escapeHtml(JSON.stringify(safeContext, null, 2))}</pre>`,
+            }));
+            channels.push('email');
+        }
+
+        const settled = await Promise.allSettled(tasks);
+        const dispatched = { webhook: false, email: false };
+        settled.forEach((result, index) => {
+            const channel = channels[index];
+            if (result.status === 'fulfilled') {
+                dispatched[channel] = true;
+                counters[channel] += 1;
+            } else {
+                counters.deliveryFailures += 1;
+                log?.error?.('Operational alert delivery failed.', {
+                    event: 'alert_delivery_failed',
+                    channel,
+                    severity: safeSeverity,
+                    errorCode: result.reason?.code || 'ALERT_DELIVERY_FAILED',
+                });
+            }
+        });
+
+        return { deduplicated: false, dispatched };
+    };
+
+    const getStats = () => ({ ...counters, activeFingerprints: recentAlerts.size });
+    return { getStats, notify };
 };
 
-export default { notify, SEVERITY };
+const alertService = createAlertService();
+
+export const notify = alertService.notify;
+export const getAlertStats = alertService.getStats;
+
+export default alertService;

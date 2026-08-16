@@ -20,7 +20,8 @@
     "validate:migrations": "node server/scripts/check_stage7_migrations.js",
     "seo:close-stage5b-content": "node server/scripts/close_stage5b_content_gate.js",
     "performance:budget": "node server/scripts/check_stage5c_performance_budget.js",
-    "verify:stage5c": "npm run build && npm run performance:budget && npm run test:serial"
+    "verify:stage5c": "npm run build && npm run performance:budget && npm run test:serial",
+    "verify:stage7b": "node --test --test-concurrency=1 server/tests/stage7bObservability.test.js"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

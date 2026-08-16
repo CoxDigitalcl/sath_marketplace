@@ -1,4 +1,5 @@
-import app from './server/index.js';
+import app, { startApplicationObservability } from './server/index.js';
+import logger from './server/config/logger.js';
 
 // cPanel Entry Point
 // This file acts as the "Startup File" in the root directory.
@@ -6,6 +7,10 @@ import app from './server/index.js';
 
 const PORT = process.env.PORT || 3001;
 
+startApplicationObservability();
 app.listen(PORT, () => {
-    console.log(`Server started via app.js on port ${PORT}`);
+    logger.info('Server started via cPanel entry point.', {
+        event: 'server_started',
+        port: Number(PORT),
+    });
 });

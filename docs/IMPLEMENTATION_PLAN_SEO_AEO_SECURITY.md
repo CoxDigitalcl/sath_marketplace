@@ -282,13 +282,13 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** hacer que las páginas sean comprensibles, citables y útiles después de una respuesta generada por IA.
 
-**Estado técnico al 2026-08-15:** remediación desplegada en tres bloques; hotfix posterior implementado y validado localmente, pendiente de commit/deploy y smoke HTTP final.
+**Estado técnico al 2026-08-16:** remediación y hotfix desplegados; smoke HTTP final aprobado en producción. Permanecen únicamente las dependencias editoriales/legales del dueño y transcripciones reales cuando correspondan.
 
 - **6A — Integridad y confianza:** métricas simuladas eliminadas; ratings solo con reseñas reales; claims, garantías y tiempos no verificables retirados.
 - **6B — Capa semántica:** grafo JSON-LD seguro con IDs estables, categorías vacías en `noindex` y sitemap limitado a oferta pública activa.
 - **6C — Contenido y conversión:** descripciones renderizadas sin Markdown crudo, plantilla editorial ampliada, alcance de verificación visible, CTA trazable sin PII y soporte de transcripción.
 - **Hotfix de cierre:** los resúmenes SSR usan texto plano y los proveedores sin oferta pública quedan en `noindex` y fuera del sitemap.
-- **Pendiente para aprobar el gate:** desplegar y ejecutar el smoke HTTP del hotfix; revisión final del dueño/asesoría legal, completar contenido faltante de los servicios y aportar transcripciones reales cuando existan videos relevantes.
+- **Pendiente para aprobar el gate:** revisión final del dueño/asesoría legal, completar contenido faltante de los servicios y aportar transcripciones reales cuando existan videos relevantes.
 
 **Trabajo**
 
@@ -323,7 +323,7 @@ La apertura de campañas o tráfico pagado requiere G1–G4 y G6. La campaña SE
 
 **Propósito:** impedir regresiones y abrir tráfico con capacidad de detectar y revertir fallos.
 
-**Estado de remediación al 2026-08-15:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A está cerrada técnicamente: implementación publicada en `b7eb443`, `Quality gate` y `Clean schema` verdes, secreto CI configurado y `main` protegido con PR/checks obligatorios, historial lineal y sin force-push. El PR #1 permanece en borrador para el merge controlado. Pendiente: merge/deploy del hotfix y continuar con 7B. G6 aún no está aprobado.
+**Estado de remediación al 2026-08-16:** auditoría completada en [STAGE7_GAP_AUDIT_2026-08-15.md](./STAGE7_GAP_AUDIT_2026-08-15.md). 7A fue integrada mediante el PR #1 y desplegada en `2d204cd`; `main` conserva CI y protección obligatoria. 7B está implementada en `codex/stage7b-observability` con pruebas específicas verdes y documentación en [STAGE7B_OBSERVABILITY.md](./STAGE7B_OBSERVABILITY.md); falta publicar/desplegar, comprobar persistencia en cPanel y configurar un canal externo. G6 aún no está aprobado porque también resta 7C.
 
 **Automatización CI**
 

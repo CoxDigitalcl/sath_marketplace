@@ -33,4 +33,17 @@ export const flush = () => {
     logger.info('[CACHE FLUSH] All cache cleared');
 };
 
-export default { get, set, del, flush };
+export const stats = () => {
+    const current = cache.getStats();
+    const attempts = current.hits + current.misses;
+    return {
+        keys: current.keys,
+        hits: current.hits,
+        misses: current.misses,
+        hitRate: attempts > 0 ? Math.round((current.hits / attempts) * 10000) / 100 : 0,
+        keyBytes: current.ksize,
+        valueBytes: current.vsize,
+    };
+};
+
+export default { get, set, del, flush, stats };
