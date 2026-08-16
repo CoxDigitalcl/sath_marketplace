@@ -26,8 +26,16 @@ import AlertService, { SEVERITY } from '../services/alertService.js';
 // ...
 
 pool.on('error', async (err, client) => {
-    logger.error('Unexpected error on idle client', err);
-    await AlertService.notify(err, { component: 'DB', event: 'IDLE_CLIENT_ERROR' }, SEVERITY.CRITICAL);
+    logger.error('Unexpected error on idle database client.', {
+        event: 'db_idle_client_error',
+        errorCode: err?.code || 'DB_IDLE_CLIENT_ERROR',
+    });
+    await AlertService.notify(new Error('Database idle client failed.'), {
+        alertKey: 'DB_IDLE_CLIENT_ERROR',
+        component: 'DB',
+        event: 'IDLE_CLIENT_ERROR',
+        errorCode: err?.code || 'DB_IDLE_CLIENT_ERROR',
+    }, SEVERITY.CRITICAL);
     process.exit(-1);
 });
 
@@ -42,9 +50,12 @@ export const query = async (text, params) => {
 
     // Slow Query Threshold: 100ms
     if (duration > 100) {
-        // Trim query for log readability
-        const cleanQuery = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : 'PreparedStatement';
-        logger.warn(`[SLOW DB QUERY] ${duration}ms - ${cleanQuery.substring(0, 200)}...`);
+        const operation = typeof text === 'string' ? text.trim().split(/\s+/, 1)[0].toUpperCase() : 'PREPARED';
+        logger.warn('Slow database query detected.', {
+            event: 'slow_db_query',
+            durationMs: Number(duration),
+            operation,
+        });
     }
 
     return result;

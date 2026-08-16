@@ -1,12 +1,13 @@
 import logger from '../config/logger.js';
 import AlertService, { SEVERITY } from '../services/alertService.js';
 import { recordError } from '../services/systemMetricService.js';
+import { resolveRequestRoute } from '../services/requestObservability.js';
 
 const errorHandler = async (err, req, res, next) => {
     const statusCode = Number(err.statusCode || err.status) || 500;
     const isServerError = statusCode >= 500;
     const correlationId = req.correlationId || 'unavailable';
-    const safePath = req.path || '/';
+    const safePath = resolveRequestRoute(req);
 
     logger.error('API request failed.', {
         statusCode,

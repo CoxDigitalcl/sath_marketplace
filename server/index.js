@@ -11,6 +11,8 @@ import securitySetup from './middleware/security.js';
 import createRequestContextMiddleware from './middleware/requestContext.js';
 import createHttpsRedirectMiddleware from './middleware/httpsRedirect.js';
 import performanceLogger from './middleware/performanceLogger.js';
+import { stats as getCacheStats } from './services/cacheService.js';
+import { startOperationalMonitor } from './services/operationalMonitor.js';
 import createSeoFrontendRouter from './middleware/seoFrontend.js';
 import db from './config/db.js';
 import authRoutes from './routes/authRoute.js';
@@ -56,13 +58,6 @@ securitySetup(app);
 // 2.1 Performance Monitoring
 app.use(performanceLogger);
 
-// 3. Request Logging (Console Only)
-app.use((req, res, next) => {
-    if (logger && logger.info) {
-        logger.info('HTTP request', { method: req.method, path: req.path, correlationId: req.correlationId });
-    }
-    next();
-});
 
 // 4. API Routes
 app.use('/api/auth', authRoutes);
@@ -110,6 +105,14 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
+let stopOperationalMonitor = null;
+export const startApplicationObservability = () => {
+    if (process.env.NODE_ENV === 'production' && process.env.OBSERVABILITY_MONITOR_ENABLED !== 'false' && !stopOperationalMonitor) {
+        stopOperationalMonitor = startOperationalMonitor({ pool: db.pool, cacheStats: getCacheStats });
+    }
+    return stopOperationalMonitor;
+};
+
 // 5. Serve Frontend through the single SEO-aware production router.
 if (process.env.NODE_ENV === 'production') {
     const buildPath = path.join(__dirname, '..', 'dist');
@@ -121,8 +124,12 @@ app.use(errorHandler);
 
 // 7. Start Server
 if (import.meta.url === `file://${process.argv[1]}`) {
+    startApplicationObservability();
     app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+        logger.info('Server started.', {
+            event: 'server_started',
+            port: Number(PORT),
+        });
     });
 }
 

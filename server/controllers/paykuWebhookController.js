@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import logger from '../config/logger.js';
+import AlertService, { SEVERITY } from '../services/alertService.js';
 import { verifyTransaction } from '../services/payku.js';
 import { createPaymentConfirmationEffects } from '../services/paymentConfirmationEffects.js';
 import { createPaymentOutboxWorker } from '../services/paymentOutboxWorker.js';
@@ -26,8 +27,17 @@ let stopOutboxWorker = null;
 
 const isPaymentOutboxEnabled = () => process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true';
 
+const notifyPaymentObservation = (message, context, severity) => {
+    void AlertService.notify(new Error(message), context, severity).catch((error) => {
+        logger.error('Payment alert scheduling failed.', {
+            event: 'payment_alert_scheduling_failed',
+            errorCode: error?.code || 'PAYMENT_ALERT_SCHEDULING_FAILED',
+        });
+    });
+};
+
 const getCorrelationId = (req) => {
-    const candidate = req.id || req.get?.('x-request-id');
+    const candidate = req.correlationId || req.id || req.get?.('x-request-id');
     return typeof candidate === 'string' && /^[a-zA-Z0-9._:-]{1,128}$/.test(candidate)
         ? candidate
         : undefined;
@@ -43,6 +53,13 @@ export const handlePaykuWebhook = async (req, res) => {
     const result = await processor.processWebhook(req.body, { correlationId });
 
     if (result.outcome === 'retry') {
+        notifyPaymentObservation('Payment webhook requires retry.', {
+            alertKey: `PAYMENT_WEBHOOK_RETRY:${result.code}`,
+            component: 'PAYMENT',
+            event: 'WEBHOOK_RETRY',
+            errorCode: result.code,
+            correlationId,
+        }, SEVERITY.HIGH);
         return res.status(503).json({
             status: 'retry',
             code: result.code,
@@ -50,10 +67,27 @@ export const handlePaykuWebhook = async (req, res) => {
     }
 
     if (result.outcome === 'rejected') {
+        const severity = /CONFLICT|MISMATCH/.test(result.code || '') ? SEVERITY.HIGH : SEVERITY.WARNING;
+        notifyPaymentObservation('Payment webhook was rejected.', {
+            alertKey: `PAYMENT_WEBHOOK_REJECTED:${result.code}`,
+            component: 'PAYMENT',
+            event: 'WEBHOOK_REJECTED',
+            errorCode: result.code,
+            correlationId,
+        }, severity);
         return res.status(200).json({
             status: 'rejected',
             code: result.code,
         });
+    }
+
+    if (result.outcome === 'duplicate') {
+        notifyPaymentObservation('Payment webhook replay was handled idempotently.', {
+            alertKey: 'PAYMENT_WEBHOOK_REPLAY',
+            component: 'PAYMENT',
+            event: 'WEBHOOK_REPLAY',
+            correlationId,
+        }, SEVERITY.WARNING);
     }
 
     if (result.outcome === 'confirmed' && isPaymentOutboxEnabled()) {
