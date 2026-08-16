@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-08-15
 **Alcance:** CI, observabilidad, medición, despliegue gradual y rollback del marketplace Servicios a tu Hogar.
-**Estado de remediación:** 7A está integrada y desplegada; 7B está implementada localmente y pendiente de publicación/configuración del canal externo. G6 todavía requiere el cierre de 7B y 7C.
+**Estado de remediación:** 7A y 7B están integradas y desplegadas. La telemetría 7B está activa; su prueba controlada detectó una brecha de éxito parcial en el outbox que se corrige con checkpoints por entrega. G6 todavía requiere confirmar SimpleFactura, configurar un canal externo y cerrar 7C.
 
 ## Resumen ejecutivo
 
@@ -96,7 +96,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ### 7B — Observabilidad y medición
 
-**Estado al 2026-08-16:** implementación técnica completada en la rama `codex/stage7b-observability`: logs JSON rotables, redacción, métricas/percentiles, panel administrativo, monitor de DB/disco/cache/outbox y alertas agregadas. Pendiente: commit/PR/deploy y configuración del canal externo por el dueño. Detalle en [STAGE7B_OBSERVABILITY.md](./STAGE7B_OBSERVABILITY.md).
+**Estado al 2026-08-16:** implementación integrada mediante el PR #2 y desplegada en `acf6141`: logs JSON rotables, redacción, métricas/percentiles, panel administrativo, monitor de DB/disco/cache/outbox y alertas agregadas. La persistencia fue verificada en cPanel. La reconciliación posterior y el hotfix de entregas parciales se documentan en [STAGE7B_OUTBOX_RECONCILIATION_2026-08-16.md](./STAGE7B_OUTBOX_RECONCILIATION_2026-08-16.md). Pendiente del dueño: configurar el canal externo y confirmar Certificación en SimpleFactura.
 
 1. Persistir logs JSON con correlation ID, ruta normalizada, status, duración y familia de user-agent.
 2. Medir p50/p95/p99, tasa 5xx/4xx/429, pool DB, disco/uploads, cache y atraso/error del outbox.
@@ -114,7 +114,7 @@ Existen pruebas de seguridad e integración en Node, pero no se encontró automa
 
 ## Decisión de gate
 
-**G6: no aprobado todavía.** 7A y el despliegue del hotfix están cerrados. Permanecen publicar/verificar 7B, configurar al menos un canal externo y ensayar el rollback de 7C antes de la apertura pública.
+**G6: no aprobado todavía.** 7A y el despliegue base de 7B están cerrados. Permanecen desplegar/verificar el hotfix de entregas parciales, confirmar SimpleFactura, configurar al menos un canal externo y ensayar el rollback de 7C antes de la apertura pública.
 
 ## Dependencias del dueño
 

@@ -124,9 +124,11 @@ export const createInAppNotification = async ({ userId, title, message, type = '
             [userId, title, message, type, link]
         );
         logger.info(`[NOTIFICATION] Created for user ${userId}: ${title}`);
+        return true;
     } catch (err) {
         // Log but don't throw — notifications should never crash the main flow
         logger.error(`[NOTIFICATION] Failed to create for user ${userId}: ${err.message}`);
+        return false;
     }
 };
 

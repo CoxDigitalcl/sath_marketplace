@@ -29,7 +29,7 @@ test('notification effect skips bookings already marked as notified', async () =
     assert.equal(externalCalls, 0);
 });
 
-test('notification effect completes contacts before marking the booking as sent', async () => {
+test('notification effect checkpoints each delivery before marking the booking as sent', async () => {
     const order = [];
     const pool = {
         async query(sql) {
@@ -46,6 +46,11 @@ test('notification effect completes contacts before marking the booking as sent'
                         guest_name: 'Cliente',
                         guest_phone: '+56900000000',
                         notifications_sent: false,
+                        payment_client_email_sent_at: null,
+                        payment_provider_email_sent_at: null,
+                        payment_guest_email_sent_at: null,
+                        payment_provider_inapp_sent_at: null,
+                        payment_client_inapp_sent_at: null,
                         service_title: 'Servicio de prueba',
                         client_email: 'cliente@example.test',
                         client_name: 'Cliente',
@@ -58,8 +63,13 @@ test('notification effect completes contacts before marking the booking as sent'
                     rowCount: 1,
                 };
             }
-            if (normalized.startsWith('UPDATE bookings')) {
+            if (normalized.includes('SET notifications_sent = TRUE')) {
                 order.push('mark-sent');
+                return { rows: [{ id: BOOKING_ID }], rowCount: 1 };
+            }
+            const checkpoint = normalized.match(/SET (payment_[a-z_]+_sent_at) =/);
+            if (checkpoint) {
+                order.push(`checkpoint:${checkpoint[1]}`);
                 return { rows: [], rowCount: 1 };
             }
             throw new Error(`Unexpected query: ${normalized}`);
@@ -67,15 +77,87 @@ test('notification effect completes contacts before marking the booking as sent'
     };
     const effects = createPaymentConfirmationEffects({
         pool,
-        sendContacts: async () => { order.push('contacts'); },
-        sendGuestConfirmation: async () => { order.push('guest'); },
-        createNotification: async () => { order.push('in-app'); },
+        sendContacts: async ({ onClientSent, onProviderSent }) => {
+            order.push('client-email');
+            await onClientSent();
+            order.push('provider-email');
+            await onProviderSent();
+        },
+        sendGuestConfirmation: async ({ onSent }) => {
+            order.push('guest-email');
+            await onSent();
+            return true;
+        },
+        createNotification: async () => {
+            order.push('in-app');
+            return true;
+        },
     });
 
     const result = await effects['payment.notifications.requested']({ bookingId: BOOKING_ID });
 
     assert.deepEqual(result, { skipped: false });
-    assert.deepEqual(order, ['contacts', 'guest', 'in-app', 'mark-sent']);
+    assert.deepEqual(order, [
+        'client-email',
+        'checkpoint:payment_client_email_sent_at',
+        'provider-email',
+        'checkpoint:payment_provider_email_sent_at',
+        'guest-email',
+        'checkpoint:payment_guest_email_sent_at',
+        'in-app',
+        'checkpoint:payment_provider_inapp_sent_at',
+        'mark-sent',
+    ]);
+});
+
+test('partial email failure preserves the successful checkpoint and rejects completion', async () => {
+    const checkpoints = [];
+    const pool = {
+        async query(sql) {
+            const normalized = String(sql).replace(/\s+/g, ' ').trim();
+            if (normalized.includes('FROM bookings b')) {
+                return {
+                    rows: [{
+                        id: BOOKING_ID,
+                        client_id: null,
+                        notifications_sent: false,
+                        payment_client_email_sent_at: null,
+                        payment_provider_email_sent_at: null,
+                        payment_guest_email_sent_at: null,
+                        payment_provider_inapp_sent_at: null,
+                        payment_client_inapp_sent_at: null,
+                        client_email: 'cliente@example.test',
+                        provider_email: 'proveedor@example.test',
+                        provider_id: 'ed0cd453-1fc4-4ba7-9297-c02f24f1af77',
+                    }],
+                    rowCount: 1,
+                };
+            }
+            const checkpoint = normalized.match(/SET (payment_[a-z_]+_sent_at) =/);
+            if (checkpoint) {
+                checkpoints.push(checkpoint[1]);
+                return { rows: [], rowCount: 1 };
+            }
+            throw new Error(`Unexpected query: ${normalized}`);
+        },
+    };
+    const effects = createPaymentConfirmationEffects({
+        pool,
+        sendContacts: async ({ onClientSent }) => {
+            await onClientSent();
+            const error = new Error('provider rejected');
+            error.code = 'PROVIDER_EMAIL_DELIVERY_FAILED';
+            throw error;
+        },
+        sendGuestConfirmation: async () => true,
+        createNotification: async () => true,
+    });
+
+    await assert.rejects(
+        effects['payment.notifications.requested']({ bookingId: BOOKING_ID }),
+        (error) => error.code === 'PROVIDER_EMAIL_DELIVERY_FAILED',
+    );
+    assert.deepEqual(checkpoints, ['payment_client_email_sent_at']);
 });
 
 test('invoice effect never calls the provider for an already generated invoice', async () => {
