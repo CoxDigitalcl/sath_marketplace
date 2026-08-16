@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import logger from '../config/logger.js';
 import { pool } from '../config/db.js';
+import { deliverEmail } from './emailDelivery.js';
 
 // Create Transporter
 // On cPanel, if no SMTP vars are set, we can try using the local sendmail
@@ -164,7 +165,18 @@ export const sendInvoiceEmail = async (to, bookingDetails, invoiceUrl) => {
     return sendEmail({ to, subject, html });
 };
 
-export const sendCrossContactEmails = async ({ bookingId, serviceName, client, provider, booking = {} }) => {
+export const sendCrossContactEmails = async ({
+    bookingId,
+    serviceName,
+    client,
+    provider,
+    booking = {},
+    sendClient = true,
+    sendProvider = true,
+    onClientSent = async () => {},
+    onProviderSent = async () => {},
+    send = sendEmail,
+}) => {
     // Format booking details if available
     const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
     const scheduledTime = booking.selected_times ? (Array.isArray(booking.selected_times) ? booking.selected_times.join(', ') : booking.selected_times) : '';
@@ -227,8 +239,29 @@ export const sendCrossContactEmails = async ({ bookingId, serviceName, client, p
         </div>
     `;
 
-    await sendEmail({ to: client.email, subject: clientSubject, html: clientHtml });
-    await sendEmail({ to: provider.email, subject: providerSubject, html: providerHtml });
+    let clientDelivered = !sendClient;
+    if (sendClient) {
+        clientDelivered = await deliverEmail({
+            send,
+            payload: { to: client.email, subject: clientSubject, html: clientHtml },
+            errorCode: 'CLIENT_EMAIL_DELIVERY_FAILED',
+            errorMessage: 'Client contact email was rejected',
+            onDelivered: onClientSent,
+        });
+    }
+
+    let providerDelivered = !sendProvider;
+    if (sendProvider) {
+        providerDelivered = await deliverEmail({
+            send,
+            payload: { to: provider.email, subject: providerSubject, html: providerHtml },
+            errorCode: 'PROVIDER_EMAIL_DELIVERY_FAILED',
+            errorMessage: 'Provider contact email was rejected',
+            onDelivered: onProviderSent,
+        });
+    }
+
+    return { client: clientDelivered, provider: providerDelivered };
 };
 
 /**
@@ -241,7 +274,15 @@ export const sendCrossContactEmails = async ({ bookingId, serviceName, client, p
  * - Escrow guarantee explanation
  * - CTA to register for future benefits
  */
-export const sendGuestBookingConfirmation = async ({ bookingId, serviceName, guest, provider, booking = {} }) => {
+export const sendGuestBookingConfirmation = async ({
+    bookingId,
+    serviceName,
+    guest,
+    provider,
+    booking = {},
+    send = sendEmail,
+    onSent = async () => {},
+}) => {
     const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Por confirmar';
     const scheduledTime = booking.selected_times ? (Array.isArray(booking.selected_times) ? booking.selected_times.join(', ') : booking.selected_times) : '';
     const amount = booking.amount ? `$${Number(booking.amount).toLocaleString('es-CL')}` : '';
@@ -323,8 +364,15 @@ export const sendGuestBookingConfirmation = async ({ bookingId, serviceName, gue
         </div>
     `;
 
-    await sendEmail({ to: guest.email, subject, html });
+    await deliverEmail({
+        send,
+        payload: { to: guest.email, subject, html },
+        errorCode: 'GUEST_EMAIL_DELIVERY_FAILED',
+        errorMessage: 'Guest confirmation email was rejected',
+        onDelivered: onSent,
+    });
     logger.info('[Guest Email] Booking confirmation sent.', { bookingId });
+    return true;
 };
 
 export default { sendEmail, notifyAdmin, sendInvoiceEmail, sendCrossContactEmails, sendGuestBookingConfirmation };

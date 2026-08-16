@@ -111,6 +111,15 @@ CREATE TABLE IF NOT EXISTS bookings (
     invoice_url VARCHAR(512),
     invoice_folio VARCHAR(50),
     invoice_status VARCHAR(50) DEFAULT 'pending',
+
+    -- Per-recipient checkpoints for retryable payment confirmation effects
+    notifications_sent BOOLEAN DEFAULT FALSE,
+    payment_client_email_sent_at TIMESTAMP WITH TIME ZONE,
+    payment_provider_email_sent_at TIMESTAMP WITH TIME ZONE,
+    payment_guest_email_sent_at TIMESTAMP WITH TIME ZONE,
+    payment_provider_inapp_sent_at TIMESTAMP WITH TIME ZONE,
+    payment_client_inapp_sent_at TIMESTAMP WITH TIME ZONE,
+
     settlement_url VARCHAR(512),
     settlement_folio VARCHAR(50),
     settlement_status VARCHAR(50) DEFAULT 'pending',

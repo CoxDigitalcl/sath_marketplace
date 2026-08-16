@@ -109,3 +109,15 @@ test('payment migration defines unique bindings and a retryable outbox', async (
     assert.match(sql, /available_at/i);
     assert.match(sql, /processed_at/i);
 });
+
+test('notification delivery migration adds resumable per-recipient checkpoints', async () => {
+    const migrationUrl = new URL('../scripts/migrations/add_payment_notification_delivery_integrity.sql', import.meta.url);
+    const sql = await readFile(migrationUrl, 'utf8');
+
+    assert.match(sql, /payment_client_email_sent_at/i);
+    assert.match(sql, /payment_provider_email_sent_at/i);
+    assert.match(sql, /payment_guest_email_sent_at/i);
+    assert.match(sql, /payment_provider_inapp_sent_at/i);
+    assert.match(sql, /payment_client_inapp_sent_at/i);
+    assert.match(sql, /WHERE notifications_sent IS TRUE/i);
+});

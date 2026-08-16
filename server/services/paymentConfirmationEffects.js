@@ -43,6 +43,11 @@ export const createPaymentConfirmationEffects = ({
                 b.guest_name,
                 b.guest_phone,
                 b.notifications_sent,
+                b.payment_client_email_sent_at,
+                b.payment_provider_email_sent_at,
+                b.payment_guest_email_sent_at,
+                b.payment_provider_inapp_sent_at,
+                b.payment_client_inapp_sent_at,
                 s.title AS service_title,
                 COALESCE(c.email, b.guest_email) AS client_email,
                 COALESCE(b.guest_name, c.full_name, c.email, b.guest_email) AS client_name,
@@ -71,6 +76,25 @@ export const createPaymentConfirmationEffects = ({
             throw codedError('NOTIFICATION_CONTACTS_MISSING', 'Payment notification contacts are incomplete');
         }
 
+        const deliveryColumns = new Set([
+            'payment_client_email_sent_at',
+            'payment_provider_email_sent_at',
+            'payment_guest_email_sent_at',
+            'payment_provider_inapp_sent_at',
+            'payment_client_inapp_sent_at',
+        ]);
+        const markDelivery = async (column) => {
+            if (!deliveryColumns.has(column)) {
+                throw codedError('INVALID_DELIVERY_CHECKPOINT', 'Unknown notification checkpoint');
+            }
+            await pool.query(
+                `UPDATE bookings
+                 SET ${column} = COALESCE(${column}, CURRENT_TIMESTAMP)
+                 WHERE id = $1`,
+                [bookingId]
+            );
+        };
+
         const shortId = String(row.id).slice(0, 8).toUpperCase();
         const booking = {
             scheduled_date: row.scheduled_date,
@@ -93,10 +117,14 @@ export const createPaymentConfirmationEffects = ({
             },
             provider,
             booking,
+            sendClient: !row.payment_client_email_sent_at,
+            sendProvider: !row.payment_provider_email_sent_at,
+            onClientSent: () => markDelivery('payment_client_email_sent_at'),
+            onProviderSent: () => markDelivery('payment_provider_email_sent_at'),
         });
 
-        if (!row.client_id) {
-            await sendGuestConfirmation({
+        if (!row.client_id && !row.payment_guest_email_sent_at) {
+            const guestDelivered = await sendGuestConfirmation({
                 bookingId: shortId,
                 serviceName: row.service_title,
                 guest: {
@@ -106,34 +134,56 @@ export const createPaymentConfirmationEffects = ({
                 },
                 provider,
                 booking,
+                onSent: () => markDelivery('payment_guest_email_sent_at'),
             });
+            if (guestDelivered !== true) {
+                throw codedError('GUEST_EMAIL_DELIVERY_FAILED', 'Guest confirmation email did not report success');
+            }
         }
 
-        await createNotification({
-            userId: row.provider_id,
-            title: 'Nueva reserva confirmada',
-            message: `${row.client_name} ha reservado y pagado "${row.service_title}".`,
-            type: 'booking',
-            link: '/provider?view=orders',
-        });
+        if (!row.payment_provider_inapp_sent_at) {
+            const providerNotified = await createNotification({
+                userId: row.provider_id,
+                title: 'Nueva reserva confirmada',
+                message: `${row.client_name} ha reservado y pagado "${row.service_title}".`,
+                type: 'booking',
+                link: '/provider?view=orders',
+            });
+            if (providerNotified !== true) {
+                throw codedError('PROVIDER_INAPP_NOTIFICATION_FAILED', 'Provider in-app notification failed');
+            }
+            await markDelivery('payment_provider_inapp_sent_at');
+        }
 
-        if (row.client_id) {
-            await createNotification({
+        if (row.client_id && !row.payment_client_inapp_sent_at) {
+            const clientNotified = await createNotification({
                 userId: row.client_id,
                 title: 'Pago confirmado',
                 message: `Tu pago por "${row.service_title}" ha sido procesado.`,
                 type: 'success',
                 link: '/client?view=orders',
             });
+            if (clientNotified !== true) {
+                throw codedError('CLIENT_INAPP_NOTIFICATION_FAILED', 'Client in-app notification failed');
+            }
+            await markDelivery('payment_client_inapp_sent_at');
         }
 
-        await pool.query(
+        const completion = await pool.query(
             `UPDATE bookings
              SET notifications_sent = TRUE
              WHERE id = $1
-               AND notifications_sent IS DISTINCT FROM TRUE`,
-            [bookingId]
+               AND payment_client_email_sent_at IS NOT NULL
+               AND payment_provider_email_sent_at IS NOT NULL
+               AND payment_provider_inapp_sent_at IS NOT NULL
+               AND ($2::boolean OR payment_guest_email_sent_at IS NOT NULL)
+               AND (NOT $2::boolean OR payment_client_inapp_sent_at IS NOT NULL)
+             RETURNING id`,
+            [bookingId, Boolean(row.client_id)]
         );
+        if (completion.rowCount !== 1) {
+            throw codedError('NOTIFICATION_DELIVERY_INCOMPLETE', 'Notification checkpoints are incomplete');
+        }
 
         log.info('[Payment Effects] Notifications completed', { bookingId });
         return { skipped: false };
