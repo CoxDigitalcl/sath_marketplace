@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     createService, getServices, getFeaturedServices, getServiceById, getMyServices, updateService,
+    updateServicePublicationStatus,
     createPromotion, getActivePromotionTiers
 } from '../controllers/serviceController.js';
 import { authenticateToken, requireVerified } from '../middleware/sessionAuth.js';
@@ -31,6 +32,7 @@ router.get('/promotion-tiers', getActivePromotionTiers);
 router.get('/my-services', authenticateToken, requireRole('provider'), getMyServices);
 router.post('/', authenticateToken, requireRole('provider'), requireVerified, createService);
 router.put('/:id', authenticateToken, requireRole('provider'), requireVerified, updateService);
+router.patch('/:id/status', authenticateToken, requireRole('provider'), requireVerified, updateServicePublicationStatus);
 
 // Video Upload Endpoint (50MB max)
 router.post('/upload-video', authenticateToken, requireRole('provider', 'admin'), requireVerified, serviceVideoUploadLimiter, cleanupRejectedUploads, videoUpload.single('video'), validateVideoUpload, validateUploadedFileSignatures, (req, res) => {

@@ -315,6 +315,89 @@ export const updateService = async (req, res, next) => {
 };
 
 
+// UPDATE SERVICE PUBLICATION STATUS
+// PATCH /api/services/:id/status
+export const updateServicePublicationStatus = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        const isActive = req.body?.is_active;
+
+        if (!isValidUuid(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Identificador de servicio invalido.',
+                code: 'INVALID_SERVICE_ID'
+            });
+        }
+        if (typeof isActive !== 'boolean') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'El estado activo del servicio debe ser verdadero o falso.',
+                code: 'INVALID_SERVICE_STATUS'
+            });
+        }
+
+        const serviceCheck = await pool.query(
+            'SELECT provider_id, moderation_status, is_active FROM services WHERE id = $1',
+            [id]
+        );
+        if (serviceCheck.rows.length === 0) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Servicio no encontrado.',
+                code: 'SERVICE_NOT_FOUND'
+            });
+        }
+
+        const service = serviceCheck.rows[0];
+        if (service.provider_id !== userId) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'No tienes permisos para cambiar el estado de este servicio.',
+                code: 'SERVICE_STATUS_FORBIDDEN'
+            });
+        }
+        if (service.moderation_status !== 'approved') {
+            return res.status(409).json({
+                status: 'error',
+                message: 'El servicio debe estar aprobado por un administrador antes de poder activarlo o pausarlo.',
+                code: 'SERVICE_NOT_APPROVED'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE services
+             SET is_active = $1,
+                 updated_at = NOW()
+             WHERE id = $2
+               AND provider_id = $3
+               AND moderation_status = 'approved'
+             RETURNING id, is_active, moderation_status, updated_at`,
+            [isActive, id, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'El estado de moderacion cambio durante la operacion. Recarga la lista e intenta nuevamente.',
+                code: 'SERVICE_STATUS_CONFLICT'
+            });
+        }
+
+        clearPublicServiceCache();
+        return res.json({
+            status: 'success',
+            message: isActive ? 'Servicio activado.' : 'Servicio pausado.',
+            service: result.rows[0]
+        });
+    } catch (err) {
+        logger.error(`Update Service Publication Status Error: ${err.message}`);
+        next(err);
+    }
+};
+
+
 // GET FEATURED SERVICES
 // GET /api/services/featured
 export const getFeaturedServices = async (req, res, next) => {
