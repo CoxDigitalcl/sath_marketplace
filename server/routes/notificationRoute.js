@@ -12,7 +12,7 @@ const router = express.Router();
 // All routes require authentication.
 router.get('/', authenticateToken, getNotifications);
 router.get('/unread-count', authenticateToken, getUnreadCount);
-router.patch('/:id/read', authenticateToken, markAsRead);
 router.patch('/read-all', authenticateToken, markAllAsRead);
+router.patch('/:id/read', authenticateToken, markAsRead);
 
 export default router;

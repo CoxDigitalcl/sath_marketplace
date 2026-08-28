@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check, CheckCheck, X, ExternalLink, AlertTriangle, Info, ShieldCheck, Image, MessageCircle, ShoppingBag } from 'lucide-react';
 import { api } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 interface Notification {
     id: string;
@@ -45,6 +46,8 @@ const NotificationDropdown: React.FC = () => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [markingAll, setMarkingAll] = useState(false);
+    const [pendingReadIds, setPendingReadIds] = useState<Set<string>>(() => new Set());
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
@@ -102,23 +105,43 @@ const NotificationDropdown: React.FC = () => {
     }, []);
 
     const handleMarkAsRead = async (id: string) => {
+        if (pendingReadIds.has(id)) return;
+
+        setPendingReadIds(prev => new Set(prev).add(id));
         try {
-            await api.patch(`/notifications/${id}/read`);
+            // Send a valid JSON body. Some production proxies reject an empty
+            // request while the Axios instance advertises application/json.
+            await api.patch(`/notifications/${id}/read`, {});
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
-        } catch { /* silent */ }
+        } catch {
+            toast.error('No se pudo marcar la notificación como leída. Intenta nuevamente.');
+        } finally {
+            setPendingReadIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     const handleMarkAllAsRead = async () => {
+        if (markingAll) return;
+
+        setMarkingAll(true);
         try {
-            await api.patch('/notifications/read-all');
+            await api.patch('/notifications/read-all', {});
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
             setUnreadCount(0);
-        } catch { /* silent */ }
+        } catch {
+            toast.error('No se pudieron marcar las notificaciones como leídas. Intenta nuevamente.');
+        } finally {
+            setMarkingAll(false);
+        }
     };
 
-    const handleClickNotification = (notif: Notification) => {
-        if (!notif.is_read) handleMarkAsRead(notif.id);
+    const handleClickNotification = async (notif: Notification) => {
+        if (!notif.is_read) await handleMarkAsRead(notif.id);
         if (notif.link) {
             setIsOpen(false);
             // Handle internal links like /admin?view=moderation
@@ -134,6 +157,7 @@ const NotificationDropdown: React.FC = () => {
         <div className="relative" ref={dropdownRef}>
             {/* Bell Button */}
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className="relative text-gray-500 hover:text-gray-800 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
                 aria-label="Notificaciones"
@@ -163,15 +187,18 @@ const NotificationDropdown: React.FC = () => {
                         <div className="flex items-center gap-1">
                             {unreadCount > 0 && (
                                 <button
-                                    onClick={handleMarkAllAsRead}
+                                    type="button"
+                                    onClick={() => void handleMarkAllAsRead()}
+                                    disabled={markingAll}
                                     className="text-xs text-brand-secondary hover:text-gray-900 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
                                     title="Marcar todas como leídas"
                                 >
                                     <CheckCheck size={14} />
-                                    Leer todo
+                                    {markingAll ? 'Marcando…' : 'Leer todo'}
                                 </button>
                             )}
                             <button
+                                type="button"
                                 onClick={() => setIsOpen(false)}
                                 className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                             >
@@ -199,7 +226,7 @@ const NotificationDropdown: React.FC = () => {
                                 return (
                                     <div
                                         key={notif.id}
-                                        onClick={() => handleClickNotification(notif)}
+                                        onClick={() => void handleClickNotification(notif)}
                                         className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer transition-all duration-150 group
                                             ${notif.is_read ? 'bg-white hover:bg-gray-50' : 'bg-blue-50/40 hover:bg-blue-50/70'}
                                         `}
@@ -237,7 +264,9 @@ const NotificationDropdown: React.FC = () => {
                                         {/* Mark as read button */}
                                         {!notif.is_read && (
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleMarkAsRead(notif.id); }}
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); void handleMarkAsRead(notif.id); }}
+                                                disabled={pendingReadIds.has(notif.id)}
                                                 className="flex-shrink-0 mt-1 p-1 rounded hover:bg-white text-gray-300 hover:text-green-500 transition-colors opacity-0 group-hover:opacity-100"
                                                 title="Marcar como leída"
                                             >
