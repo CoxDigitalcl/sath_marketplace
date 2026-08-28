@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Service, ServiceBooking, DailySchedule } from '../../../types';
+import { Service, ServiceBooking, ServiceChangeReviewSummary, ServiceUpdateResponse } from '../../../types';
 import ServiceList from '../services/ServiceList';
 import ServiceForm from '../services/ServiceForm';
 import ServiceCalendar from '../services/ServiceCalendar';
@@ -25,6 +25,111 @@ interface ServicePublicationStatusResponse {
     };
 }
 
+const serviceFieldLabels: Record<string, string> = {
+    title: 'nombre',
+    description: 'descripción',
+    price: 'precio',
+    video_url: 'video',
+    cover_image_url: 'imagen de portada',
+    image_urls: 'imágenes',
+    gallery_media: 'galería',
+    category: 'categoría',
+    categories_json: 'categorías',
+    duration_minutes: 'duración',
+    type: 'modalidad',
+    pricing_type: 'tipo de precio',
+    availability_type: 'disponibilidad',
+    calendar_config: 'agenda',
+    features: 'características',
+    freight_base_price: 'valor base del flete',
+    freight_price_per_km: 'valor por kilómetro',
+};
+
+const normalizeFieldNames = (fields: unknown): string[] => (
+    Array.isArray(fields)
+        ? fields.filter((field): field is string => typeof field === 'string')
+        : []
+);
+
+const normalizeReview = (source: any): ServiceChangeReviewSummary | null => {
+    if (!source || typeof source !== 'object') return null;
+
+    const rawStatus = source.status || source.review_status;
+    const status = rawStatus === 'correction_requested' ? 'changes_requested' : rawStatus;
+    if (!['pending', 'changes_requested', 'rejected'].includes(status)) return null;
+
+    const reasons = normalizeFieldNames(source.reasons);
+    return {
+        revisionId: source.revisionId || source.revision_id || source.id,
+        status,
+        scope: source.scope === 'full' ? 'full' : 'targeted',
+        changedFields: normalizeFieldNames(source.changedFields || source.changed_fields),
+        reasons: reasons.length > 0 ? reasons : undefined,
+        reason: typeof source.reason === 'string'
+            ? source.reason
+            : typeof source.correction_reason === 'string'
+                ? source.correction_reason
+                : undefined,
+    };
+};
+
+const normalizeService = (service: any): Service => ({
+    ...service,
+    review: normalizeReview(
+        service?.review
+        || service?.change_review
+        || service?.review_summary
+        || service?.pending_review
+    ),
+});
+
+const formatFieldList = (fields: string[]): string => {
+    const labels = [...new Set(fields.map(field => serviceFieldLabels[field] || field.replaceAll('_', ' ')))];
+    if (labels.length === 0) return 'los cambios';
+    if (labels.length === 1) return labels[0];
+    return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+};
+
+const showUpdateFeedback = (response: ServiceUpdateResponse, service: Service) => {
+    const appliedFields = normalizeFieldNames(response.appliedFields || (response as any).applied_fields);
+    const review = normalizeReview(
+        response.review
+        || (response as any).change_review
+        || (response as any).review_summary
+        || (response as any).service?.review
+    );
+    const publicationMessage = service.status === 'active'
+        ? 'La versión aprobada anterior continúa publicada.'
+        : service.moderation_status === 'approved'
+            ? 'La versión aprobada anterior se mantiene sin cambios.'
+            : 'Lo pendiente no se publicará hasta que sea aprobado.';
+    const appliedAction = service.status === 'active' ? 'publicados' : 'aplicados';
+
+    switch (response.outcome) {
+        case 'applied':
+            toast.success(`Cambios ${appliedAction} sin revisión: ${formatFieldList(appliedFields)}.`);
+            return;
+        case 'review_required':
+            toast.success(`Pendiente de revisión: ${formatFieldList(review?.changedFields || [])}. ${publicationMessage}`);
+            return;
+        case 'mixed':
+            toast.success(`Cambios ${appliedAction} sin revisión: ${formatFieldList(appliedFields)}. Pendiente de revisión: ${formatFieldList(review?.changedFields || [])}. ${publicationMessage}`);
+            return;
+        case 'no_changes':
+            toast('No había cambios nuevos para guardar.');
+            return;
+        default: {
+            // Compatibility with the previous API response, which did not classify changes.
+            const legacyModerationStatus = response.service?.moderation_status;
+            if (legacyModerationStatus === 'pending') {
+                toast.success('Servicio actualizado. El servidor indicó que quedó pendiente de revisión.');
+            } else {
+                toast.success('Servicio actualizado.');
+            }
+        }
+    }
+};
+
 const ProviderServices: React.FC = () => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('list');
     const [services, setServices] = useState<Service[]>([]);
@@ -43,7 +148,7 @@ const ProviderServices: React.FC = () => {
         try {
             const response = await api.get('/services/my-services');
             if (response.data.status === 'success') {
-                setServices(response.data.services);
+                setServices(response.data.services.map(normalizeService));
             }
         } catch (error) {
             console.error("Error fetching services", error);
@@ -87,7 +192,6 @@ const ProviderServices: React.FC = () => {
                 category: serviceToSave.categories[0]?.categoryId || 'other',
                 video_url: serviceToSave.videoUrl || '',
                 cover_image_url: serviceToSave.coverImageUrl || '',
-                is_active: serviceToSave.status === 'active',
                 // New Fields
                 duration_minutes: serviceToSave.duration_minutes,
                 type: serviceToSave.type,
@@ -110,8 +214,13 @@ const ProviderServices: React.FC = () => {
 
             if (serviceToSave.id) {
                 // UPDATE
-                await api.put(`/services/${serviceToSave.id}`, payload);
-                alert("Servicio actualizado correctamente.");
+                const updateRes = await api.put<ServiceUpdateResponse>(`/services/${serviceToSave.id}`, {
+                    ...payload,
+                    expected_revision_id: serviceToSave.review?.status === 'rejected'
+                        ? null
+                        : serviceToSave.review?.revisionId ?? null,
+                });
+                showUpdateFeedback(updateRes.data, serviceToSave);
             } else {
                 // CREATE
                 const createRes = await api.post('/services', payload);
@@ -135,7 +244,7 @@ const ProviderServices: React.FC = () => {
                     }
                 }
 
-                alert("Servicio creado correctamente.");
+                toast.success('Servicio creado. Quedó pendiente de revisión antes de publicarse.');
                 // Only redirect on Create
                 setActiveTab('list');
                 setEditingService(null);
@@ -147,7 +256,7 @@ const ProviderServices: React.FC = () => {
         } catch (err: any) {
             console.error("Error saving service", err);
             const msg = err.response?.data?.message || err.message || "Error al guardar";
-            alert(`Error al guardar servicio: ${msg}`);
+            toast.error(`No se pudo guardar el servicio. ${msg}`);
         }
     };
 
@@ -287,7 +396,7 @@ const ProviderServices: React.FC = () => {
                     serviceName={selectedServiceForPromotion.name}
                     onSuccess={(message) => {
                         fetchMyServices();
-                        alert(message || 'Solicitud de promocion registrada. Se publicara cuando el pago quede confirmado.');
+                        toast.success(message || 'Solicitud de promoción registrada. Se publicará cuando el pago quede confirmado.');
                     }}
                 />
             )}

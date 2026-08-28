@@ -36,7 +36,7 @@ export const getServiceQuote = async (req, res) => {
 
     try {
         const result = await pool.query(
-            `SELECT s.id, s.price, s.pricing_type, s.category, s.categories_json
+            `SELECT s.id, s.price, s.pricing_type, s.pricing_version, s.category, s.categories_json
              FROM services s
              JOIN provider_profiles p ON p.user_id = s.provider_id
              JOIN users u ON u.id = s.provider_id
@@ -71,7 +71,8 @@ export const getServiceQuote = async (req, res) => {
                 serviceFee: pricing.platformFee,
                 totalAmount: pricing.totalAmount,
                 units: billableUnits,
-                currency: 'CLP'
+                currency: 'CLP',
+                pricingVersion: Number(service.pricing_version || 1)
             }
         });
     } catch (err) {

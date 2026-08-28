@@ -308,6 +308,28 @@ export interface GalleryMediaItem {
   thumbnail?: string;
 }
 
+export type ServiceChangeReviewStatus = 'pending' | 'changes_requested' | 'rejected';
+
+export interface ServiceChangeReviewSummary {
+  revisionId?: string;
+  status: ServiceChangeReviewStatus;
+  scope?: 'targeted' | 'full';
+  changedFields: string[];
+  reasons?: string[];
+  reason?: string;
+}
+
+export type ServiceUpdateOutcome = 'applied' | 'review_required' | 'mixed' | 'no_changes';
+
+export interface ServiceUpdateResponse {
+  status: 'success';
+  message?: string;
+  outcome?: ServiceUpdateOutcome;
+  appliedFields?: string[];
+  review?: ServiceChangeReviewSummary | null;
+  service?: Partial<Service>;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -327,6 +349,7 @@ export interface Service {
   videoUrl?: string;
   moderation_status?: 'pending' | 'approved' | 'rejected';
   moderation_reason?: string;
+  review?: ServiceChangeReviewSummary | null;
   coverImageUrl?: string;
   imageUrls?: string[];
   galleryMedia?: GalleryMediaItem[];

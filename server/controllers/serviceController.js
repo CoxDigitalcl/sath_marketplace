@@ -5,6 +5,18 @@ import cacheService from '../services/cacheService.js';
 import { parseCoverageCommunes } from '../../shared/chileLocations.js';
 import { toPublicServiceDto } from '../utils/publicDtos.js';
 import { isValidUuid } from '../utils/identifiers.js';
+import {
+    createServiceWithInitialRevision,
+    recordServiceChanges,
+    ServiceRevisionError,
+} from '../services/serviceRevisionService.js';
+import { ServiceChangePolicyError } from '../services/serviceChangePolicy.js';
+import {
+    createServiceRevisionSchema,
+    formatServiceValidationError,
+    updateServiceRevisionSchema,
+} from '../utils/serviceRevisionValidation.js';
+import { notifyAllAdmins } from './notificationController.js';
 
 
 const PROMOTION_PAYMENT_STATUSES = new Set(['PAID', 'PENDING_DEDUCTION', 'PENDING', 'EXPIRED']);
@@ -169,55 +181,32 @@ export const createPromotion = async (req, res, next) => {
 // CREATE SERVICE
 // POST /api/services
 export const createService = async (req, res, next) => {
+    const parsed = createServiceRevisionSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json(formatServiceValidationError(parsed.error));
+    }
+
     try {
-        const userId = req.user.id; // From Auth Token
-        const { title, description, category, price, video_url, cover_image_url } = req.body;
-
-        if (!title || price === undefined || price === null || price === '' || !category) {
-            return res.status(400).json({ status: 'error', message: 'Missing required fields' });
-        }
-
-        const query = `
-            INSERT INTO services (
-                provider_id, title, description, category, price, video_url, is_active, moderation_status,
-                duration_minutes, type, availability_type, calendar_config, features, image_urls, categories_json, cover_image_url, gallery_media, pricing_type,
-                freight_base_price, freight_price_per_km
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, false, 'pending', $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-            RETURNING *
-        `;
-
-        // Default values for new fields if not provided
-        const {
-            duration_minutes = 60,
-            type = 'online',
-            availability_type = 'agenda',
-            calendar_config = {},
-            features = [],
-            image_urls = [],
-            categories_json = [],
-            gallery_media = [],
-            pricing_type = 'per_event',
-            freight_base_price = null,
-            freight_price_per_km = null
-        } = req.body;
-
-        const toJson = (val) => JSON.stringify(val);
-
-        const result = await pool.query(query, [
-            userId, title, description, category, price, video_url,
-            duration_minutes, type, availability_type, toJson(calendar_config), toJson(features), toJson(image_urls), toJson(categories_json),
-            cover_image_url || null, toJson(gallery_media), pricing_type,
-            freight_base_price, freight_price_per_km
-        ]);
-
-        res.status(201).json({
-            status: 'success',
-            message: 'Servicio creado y enviado a revision.',
-            service: result.rows[0]
+        const result = await createServiceWithInitialRevision({
+            providerId: req.user.id,
+            proposedChanges: parsed.data,
+        });
+        void notifyAllAdmins({
+            title: 'Nuevo Servicio por revisar',
+            message: `“${parsed.data.title}” requiere una revisión completa.`,
+            type: 'warning',
         });
 
+        return res.status(201).json({
+            status: 'success',
+            message: 'Servicio creado y enviado a revisión completa.',
+            outcome: result.outcome,
+            appliedFields: result.appliedFields,
+            review: reviewSummaryFromRevision(result.revision),
+            service: result.service,
+        });
     } catch (err) {
+        if (respondWithServiceRevisionError(res, err)) return;
         logger.error(`Create Service Error: ${err.message}`);
         next(err);
     }
@@ -228,90 +217,72 @@ export const createService = async (req, res, next) => {
 // UPDATE SERVICE
 // PUT /api/services/:id
 export const updateService = async (req, res, next) => {
+    const parsed = updateServiceRevisionSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json(formatServiceValidationError(parsed.error));
+    }
+
     try {
-        const { id } = req.params;
-        const userId = req.user.id;
-        const {
-            title, description, category, price, video_url, is_active,
-            duration_minutes, type, availability_type, calendar_config, features, image_urls, categories_json, cover_image_url, gallery_media, pricing_type,
-            freight_base_price, freight_price_per_km
-        } = req.body;
-
-        // Helper to ensure valid JSON string for Postgres
-        const toJson = (val) => (val !== undefined) ? JSON.stringify(val) : null;
-
-        // 1. Verify ownership
-        const serviceCheck = await pool.query('SELECT provider_id FROM services WHERE id = $1', [id]);
-        if (serviceCheck.rows.length === 0) {
-            return res.status(404).json({ status: 'error', message: 'Service not found' });
-        }
-        if (serviceCheck.rows[0].provider_id !== userId) {
-            return res.status(403).json({ status: 'error', message: 'Not authorized to update this service' });
-        }
-
-        // 2. Update
-        const query = `
-            UPDATE services 
-            SET 
-                title = COALESCE($1, title),
-                description = COALESCE($2, description),
-                category = COALESCE($3, category),
-                price = COALESCE($4, price),
-                video_url = COALESCE($5, video_url),
-                is_active = COALESCE($6, is_active),
-                duration_minutes = COALESCE($7, duration_minutes),
-                type = COALESCE($8, type),
-                availability_type = COALESCE($9, availability_type),
-                calendar_config = COALESCE($10, calendar_config),
-                features = COALESCE($11, features),
-                image_urls = COALESCE($12, image_urls),
-                categories_json = COALESCE($13, categories_json),
-                cover_image_url = COALESCE($14, cover_image_url),
-                gallery_media = COALESCE($15, gallery_media),
-                pricing_type = COALESCE($16, pricing_type),
-                freight_base_price = COALESCE($17, freight_base_price),
-                freight_price_per_km = COALESCE($18, freight_price_per_km),
-                moderation_status = 'pending',
-                moderation_reason = NULL,
-                moderated_at = NULL,
-                moderated_by = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $19
-            RETURNING *
-        `;
-
-        const result = await pool.query(query, [
-            title,
-            description,
-            category,
-            price,
-            video_url,
-            is_active,
-            duration_minutes,
-            type,
-            availability_type,
-            toJson(calendar_config),
-            toJson(features),
-            toJson(image_urls),
-            toJson(categories_json),
-            cover_image_url !== undefined ? cover_image_url : null,
-            gallery_media !== undefined ? toJson(gallery_media) : null,
-            pricing_type !== undefined ? pricing_type : null,
-            freight_base_price !== undefined ? freight_base_price : null,
-            freight_price_per_km !== undefined ? freight_price_per_km : null,
-            id
-        ]);
-
-        res.json({
-            status: 'success',
-            message: 'Service updated successfully',
-            service: result.rows[0]
+        const { expected_revision_id: expectedRevisionId, ...proposedChanges } = parsed.data;
+        const result = await recordServiceChanges({
+            serviceId: req.params.id,
+            providerId: req.user.id,
+            proposedChanges,
+            expectedRevisionId,
         });
 
+        if (result.appliedFields.length > 0) clearPublicServiceCache();
+        if (result.revision?.status === 'pending') {
+            void notifyAllAdmins({
+                title: 'Cambios de Servicio por revisar',
+                message: `“${result.service.title}” tiene cambios que requieren moderación.`,
+                type: 'warning',
+            });
+        }
+
+        const messages = {
+            applied: 'Los cambios seguros se aplicaron inmediatamente.',
+            review_required: 'Los cambios quedaron pendientes de revisión.',
+            mixed: 'Los cambios seguros se aplicaron y el resto quedó pendiente de revisión.',
+            no_changes: 'No había cambios nuevos para guardar.',
+        };
+        return res.json({
+            status: 'success',
+            message: messages[result.outcome],
+            outcome: result.outcome,
+            appliedFields: result.appliedFields,
+            review: reviewSummaryFromRevision(result.revision),
+            service: result.service,
+        });
     } catch (err) {
+        if (respondWithServiceRevisionError(res, err)) return;
         logger.error(`Update Service Error: ${err.message}`);
         next(err);
     }
+};
+
+const respondWithServiceRevisionError = (res, error) => {
+    if (!(error instanceof ServiceRevisionError) && !(error instanceof ServiceChangePolicyError)) return false;
+    res.status(error.statusCode || 400).json({
+        status: 'error',
+        code: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+    });
+    return true;
+};
+
+const reviewSummaryFromRevision = (revision) => {
+    if (!revision || !['pending', 'correction_requested', 'rejected'].includes(revision.status)) return null;
+    return {
+        revisionId: revision.id,
+        status: revision.status === 'correction_requested' ? 'changes_requested' : revision.status,
+        scope: revision.reviewScope === 'full' ? 'full' : 'targeted',
+        changedFields: revision.pendingFields || [],
+        reasons: (revision.reviewReasons || [])
+            .map((reason) => typeof reason === 'string' ? reason : reason?.code)
+            .filter(Boolean),
+    };
 };
 
 
@@ -773,43 +744,89 @@ export const getMyServices = async (req, res, next) => {
 
         // Use LEFT JOIN to ensure services are returned even if profile link status is quirky
         const query = `
-            SELECT s.*, p.full_name as provider_name 
-            FROM services s 
-            LEFT JOIN provider_profiles p ON s.provider_id = p.user_id 
+            SELECT s.*, p.full_name as provider_name,
+                   latest_revision.id AS change_revision_id,
+                   latest_revision.status AS change_revision_status,
+                   latest_revision.review_scope AS change_review_scope,
+                   latest_revision.pending_fields AS change_pending_fields,
+                   latest_revision.review_reasons AS change_review_reasons,
+                   latest_revision.proposed_snapshot AS change_proposed_snapshot,
+                   latest_decision.reason_code AS change_reason_code,
+                   latest_decision.comment AS change_reason_comment
+            FROM services s
+            LEFT JOIN provider_profiles p ON s.provider_id = p.user_id
+            LEFT JOIN LATERAL (
+                SELECT sr.*
+                FROM service_revisions sr
+                WHERE sr.service_id = s.id
+                ORDER BY sr.revision_number DESC
+                LIMIT 1
+            ) latest_revision ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT srd.reason_code, srd.comment
+                FROM service_revision_decisions srd
+                WHERE srd.revision_id = latest_revision.id
+                ORDER BY srd.created_at DESC
+                LIMIT 1
+            ) latest_decision ON TRUE
             WHERE s.provider_id = $1
             ORDER BY s.created_at DESC
         `;
 
         const result = await pool.query(query, [userId]);
 
-        const services = result.rows.map(row => ({
-            ...row,
-            id: String(row.id),
-            name: row.title,
-            price_clp: row.price,
-            iva_clp: Math.round(row.price * 0.19),
-            status: row.moderation_status === 'pending'
-                ? 'draft'
-                : row.moderation_status === 'rejected'
-                    ? 'flagged'
-                    : (row.is_active ? 'active' : 'paused'),
-            videoUrl: row.video_url,
-            coverImageUrl: row.cover_image_url || '',
-            galleryMedia: row.gallery_media || [],
-            // Map new fields or fallbacks
-            duration_minutes: row.duration_minutes || 60,
-            type: row.type || 'online',
-            availability_type: row.availability_type || 'agenda',
-            features: row.features || [],
-            imageUrls: row.image_urls || [],
-            calendar_config: row.calendar_config || {},
-            pricing_type: row.pricing_type || 'per_event',
-            categories: (row.categories_json && row.categories_json.length > 0)
-                ? row.categories_json
-                : [{ categoryId: row.category, subcategory: row.subcategory || row.category }],
+        const services = result.rows.map(row => {
+            const reviewStatus = ['pending', 'correction_requested', 'rejected'].includes(row.change_revision_status)
+                ? row.change_revision_status
+                : null;
+            const proposedSnapshot = reviewStatus && row.change_proposed_snapshot && typeof row.change_proposed_snapshot === 'object'
+                ? row.change_proposed_snapshot
+                : {};
+            const providerServiceRow = Object.fromEntries(
+                Object.entries(row).filter(([field]) => !field.startsWith('change_'))
+            );
+            const effectiveRow = { ...providerServiceRow, ...proposedSnapshot };
+            const reviewReasons = Array.isArray(row.change_review_reasons)
+                ? row.change_review_reasons
+                    .map((reason) => typeof reason === 'string' ? reason : reason?.code)
+                    .filter(Boolean)
+                : [];
 
-            requires_kyc: false
-        }));
+            return {
+                ...effectiveRow,
+                id: String(row.id),
+                name: effectiveRow.title,
+                price_clp: effectiveRow.price,
+                iva_clp: Math.round(effectiveRow.price * 0.19),
+                status: row.moderation_status === 'pending'
+                    ? 'draft'
+                    : row.moderation_status === 'rejected'
+                        ? 'flagged'
+                        : (row.is_active ? 'active' : 'paused'),
+                videoUrl: effectiveRow.video_url,
+                coverImageUrl: effectiveRow.cover_image_url || '',
+                galleryMedia: effectiveRow.gallery_media || [],
+                duration_minutes: effectiveRow.duration_minutes || 60,
+                type: effectiveRow.type || 'online',
+                availability_type: effectiveRow.availability_type || 'agenda',
+                features: effectiveRow.features || [],
+                imageUrls: effectiveRow.image_urls || [],
+                calendar_config: effectiveRow.calendar_config || {},
+                pricing_type: effectiveRow.pricing_type || 'per_event',
+                categories: (effectiveRow.categories_json && effectiveRow.categories_json.length > 0)
+                    ? effectiveRow.categories_json
+                    : [{ categoryId: effectiveRow.category, subcategory: effectiveRow.subcategory || effectiveRow.category }],
+                review: reviewStatus ? {
+                    revisionId: row.change_revision_id,
+                    status: reviewStatus === 'correction_requested' ? 'changes_requested' : reviewStatus,
+                    scope: row.change_review_scope === 'full' ? 'full' : 'targeted',
+                    changedFields: row.change_pending_fields || [],
+                    reasons: reviewReasons,
+                    reason: row.change_reason_comment || row.change_reason_code || undefined,
+                } : null,
+                requires_kyc: false
+            };
+        });
 
         res.json({
             status: 'success',
@@ -956,10 +973,9 @@ export const updatePromotionStatus = async (req, res, next) => {
 export const getAdminServices = async (req, res, next) => {
     try {
         const query = `
-            SELECT s.*, p.full_name as provider_name, u.email, p.phone
+            SELECT s.*, p.full_name as provider_name
             FROM services s
             LEFT JOIN provider_profiles p ON s.provider_id = p.user_id
-            LEFT JOIN users u ON s.provider_id = u.id
             ORDER BY s.created_at DESC
         `;
         const result = await pool.query(query);
@@ -974,9 +990,7 @@ export const getAdminServices = async (req, res, next) => {
             imageUrls: row.image_urls || [],
             // Ensure provider object exists for the table display
             provider: {
-                name: row.provider_name,
-                email: row.email,
-                phone: row.phone
+                name: row.provider_name
             }
         }));
 
@@ -992,59 +1006,10 @@ export const getAdminServices = async (req, res, next) => {
 };
 
 // PATCH /api/admin/services/:id/moderation
-export const moderateService = async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const status = String(req.body?.status || '').trim().toLowerCase();
-        const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
-
-        if (!isValidUuid(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Identificador de servicio invalido.',
-                code: 'INVALID_SERVICE_ID'
-            });
-        }
-        if (!['approved', 'rejected'].includes(status)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Estado de moderacion invalido.',
-                code: 'INVALID_MODERATION_STATUS'
-            });
-        }
-        if (status === 'rejected' && !reason) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Indica el motivo del rechazo.',
-                code: 'MODERATION_REASON_REQUIRED'
-            });
-        }
-
-        const result = await pool.query(
-            `UPDATE services
-             SET moderation_status = $1,
-                 moderation_reason = $2,
-                 moderated_at = NOW(),
-                 moderated_by = $3,
-                 is_active = $5,
-                 updated_at = NOW()
-             WHERE id = $4
-             RETURNING id, moderation_status, moderation_reason, moderated_at, is_active`,
-            [status, reason || null, req.user.id, id, status === 'approved']
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ status: 'error', message: 'Servicio no encontrado.' });
-        }
-
-        clearPublicServiceCache();
-        return res.json({
-            status: 'success',
-            message: status === 'approved' ? 'Servicio aprobado y publicado.' : 'Servicio rechazado.',
-            service: result.rows[0]
-        });
-    } catch (err) {
-        logger.error(`Service moderation failed: ${err.message}`);
-        next(err);
-    }
+export const moderateService = async (_req, res, _next) => {
+    return res.status(410).json({
+        status: 'error',
+        code: 'SERVICE_MODERATION_MOVED',
+        message: 'La moderación directa fue deshabilitada. Revisa el detalle de cambios antes de decidir.',
+    });
 };
