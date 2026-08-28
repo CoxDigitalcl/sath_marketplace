@@ -12,7 +12,25 @@ test('provider service mutations require provider role and current verification'
     const routes = read('server/routes/serviceRoute.js');
     assert.match(routes, /router\.post\('\/', authenticateToken, requireRole\('provider'\), requireVerified, createService\)/);
     assert.match(routes, /router\.put\('\/:id', authenticateToken, requireRole\('provider'\), requireVerified, updateService\)/);
+    assert.match(routes, /router\.patch\('\/:id\/status', authenticateToken, requireRole\('provider'\), requireVerified, updateServicePublicationStatus\)/);
     assert.match(routes, /router\.post\('\/promotions', authenticateToken, requireRole\('provider'\), requireVerified, createPromotion\)/);
+});
+
+test('provider status changes persist only for approved services without resetting moderation', () => {
+    const controller = read('server/controllers/serviceController.js');
+    const providerServices = read('src/components/provider/views/ProviderServices.tsx');
+    const serviceList = read('src/components/provider/services/ServiceList.tsx');
+    const handler = controller.match(/export const updateServicePublicationStatus[\s\S]*?\n};/)?.[0] || '';
+
+    assert.match(handler, /typeof isActive !== 'boolean'/);
+    assert.match(handler, /service\.provider_id !== userId/);
+    assert.match(handler, /service\.moderation_status !== 'approved'/);
+    assert.match(handler, /AND moderation_status = 'approved'/);
+    assert.match(handler, /SET is_active = \$1/);
+    assert.doesNotMatch(handler, /moderation_status = 'pending'/);
+    assert.match(providerServices, /`\/services\/\$\{serviceId\}\/status`/);
+    assert.match(providerServices, /\{ is_active: isActive \}/);
+    assert.match(serviceList, /disabled=\{service\.moderation_status !== 'approved'/);
 });
 
 test('provider and freight routes enforce provider role at the route boundary', () => {

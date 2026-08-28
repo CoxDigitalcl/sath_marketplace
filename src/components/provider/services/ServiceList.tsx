@@ -8,11 +8,12 @@ interface ServiceListProps {
     services: Service[];
     onEdit: (service: Service) => void;
     onDelete: (serviceId: string) => void;
-    onToggleStatus: (serviceId: string, currentStatus: Service['status']) => void;
+    onToggleStatus: (serviceId: string, isActive: boolean) => void;
     onPromote: (service: Service) => void;
+    statusUpdatingIds?: Set<string>;
 }
 
-const ServiceList: React.FC<ServiceListProps> = ({ services, onEdit, onDelete, onToggleStatus, onPromote }) => {
+const ServiceList: React.FC<ServiceListProps> = ({ services, onEdit, onDelete, onToggleStatus, onPromote, statusUpdatingIds = new Set() }) => {
     const [filters, setFilters] = useState({
         search: '',
         status: '',
@@ -37,7 +38,13 @@ const ServiceList: React.FC<ServiceListProps> = ({ services, onEdit, onDelete, o
             'draft': 'bg-gray-100 text-gray-800',
             'flagged': 'bg-red-100 text-red-800',
         };
-        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+        const labels: Record<Service['status'], string> = {
+            active: 'Activo',
+            paused: 'Pausado',
+            draft: 'Pendiente',
+            flagged: 'Rechazado',
+        };
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{labels[status]}</span>;
     };
 
     return (
@@ -112,7 +119,16 @@ const ServiceList: React.FC<ServiceListProps> = ({ services, onEdit, onDelete, o
                                     <div className="flex items-center gap-4">
                                         <ToggleSwitch
                                             enabled={service.status === 'active'}
-                                            onChange={() => onToggleStatus(service.id, service.status)}
+                                            disabled={service.moderation_status !== 'approved' || statusUpdatingIds.has(service.id)}
+                                            label={`${service.status === 'active' ? 'Pausar' : 'Activar'} ${service.name}`}
+                                            title={service.moderation_status === 'pending'
+                                                ? 'Pendiente de aprobación del administrador'
+                                                : service.moderation_status === 'rejected'
+                                                    ? 'El servicio fue rechazado y debe corregirse antes de volver a revisión'
+                                                    : statusUpdatingIds.has(service.id)
+                                                        ? 'Actualizando estado...'
+                                                        : service.status === 'active' ? 'Pausar servicio' : 'Activar servicio'}
+                                            onChange={(isActive) => onToggleStatus(service.id, isActive)}
                                         />
                                         <button onClick={() => onEdit(service)} className="text-gray-600 hover:text-brand-secondary"><Edit size={18} /></button>
                                         <button

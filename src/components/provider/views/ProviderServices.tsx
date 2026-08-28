@@ -8,10 +8,22 @@ import ServiceCalendar from '../services/ServiceCalendar';
 import PromotionModal from './PromotionModal';
 import { List, Plus, Calendar, MapPin } from 'lucide-react';
 import { api } from '../../../api/client';
+import toast from 'react-hot-toast';
 
 // Services and Bookings data is fetched dynamically from the API
 
 type ActiveTab = 'list' | 'form' | 'calendar';
+
+interface ServicePublicationStatusResponse {
+    status: 'success';
+    message: string;
+    service: {
+        id: string;
+        is_active: boolean;
+        moderation_status: 'approved';
+        updated_at: string;
+    };
+}
 
 const ProviderServices: React.FC = () => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('list');
@@ -20,6 +32,7 @@ const ProviderServices: React.FC = () => {
     const [editingService, setEditingService] = useState<Service | null>(null);
     const [loading, setLoading] = useState(true);
     const [coverageSummary, setCoverageSummary] = useState('');
+    const [statusUpdatingIds, setStatusUpdatingIds] = useState<Set<string>>(new Set());
 
     // Promotion Modal State
     const [isPromotionModalOpen, setIsPromotionModalOpen] = useState(false);
@@ -149,9 +162,33 @@ const ProviderServices: React.FC = () => {
         }
     };
 
-    const handleToggleStatus = (serviceId: string, currentStatus: Service['status']) => {
-        const newStatus = currentStatus === 'active' ? 'paused' : 'active';
-        setServices(services.map(s => s.id === serviceId ? { ...s, status: newStatus } : s));
+    const handleToggleStatus = async (serviceId: string, isActive: boolean) => {
+        setStatusUpdatingIds(current => new Set(current).add(serviceId));
+        try {
+            const response = await api.patch<ServicePublicationStatusResponse>(`/services/${serviceId}/status`, { is_active: isActive });
+            const updated = response.data?.service;
+            if (!updated) throw new Error('El servidor no devolvio el servicio actualizado.');
+
+            setServices(current => current.map(service => (
+                service.id === serviceId
+                    ? {
+                        ...service,
+                        status: updated.is_active ? 'active' : 'paused',
+                        moderation_status: updated.moderation_status,
+                    }
+                    : service
+            )));
+            toast.success(response.data?.message || (isActive ? 'Servicio activado.' : 'Servicio pausado.'));
+        } catch (err: any) {
+            const message = err.response?.data?.message || err.message || 'No se pudo actualizar el estado del servicio.';
+            toast.error(message);
+        } finally {
+            setStatusUpdatingIds(current => {
+                const next = new Set(current);
+                next.delete(serviceId);
+                return next;
+            });
+        }
     };
 
     // Promotion handlers
@@ -162,7 +199,7 @@ const ProviderServices: React.FC = () => {
 
     const renderContent = () => {
         switch (activeTab) {
-            case 'list': return <ServiceList services={services} onEdit={handleEdit} onDelete={handleDelete} onToggleStatus={handleToggleStatus} onPromote={handlePromote} />;
+            case 'list': return <ServiceList services={services} onEdit={handleEdit} onDelete={handleDelete} onToggleStatus={handleToggleStatus} onPromote={handlePromote} statusUpdatingIds={statusUpdatingIds} />;
             case 'form': return <ServiceForm service={editingService} onSave={handleSave} onCancel={handleCancel} />;
             case 'calendar': return <ServiceCalendar bookings={bookings} />;
             default: return null;
