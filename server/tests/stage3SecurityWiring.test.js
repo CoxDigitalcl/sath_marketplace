@@ -101,13 +101,19 @@ test('public idea submission is rate limited, bounded and HTML escaped', () => {
 test('new and edited services require admin moderation before publication', () => {
     const controller = read('server/controllers/serviceController.js');
     const adminRoutes = read('server/routes/adminRoute.js');
+    const adminServices = read('src/components/admin/views/AdminServices.tsx');
     const migration = read('server/scripts/migrations/add_service_moderation.sql');
 
     assert.match(controller, /false, 'pending'/);
     assert.match(controller, /moderation_status = 'pending'/);
     assert.match(controller, /s\.moderation_status = 'approved'/);
     assert.match(controller, /export const moderateService/);
+    assert.match(controller, /is_active = \$5/);
+    assert.doesNotMatch(controller, /is_active = \(\$1 = 'approved'\)/);
     assert.match(adminRoutes, /router\.patch\('\/services\/:id\/moderation', moderateService\)/);
+    assert.match(adminServices, /service\.coverImageUrl \|\| service\.imageUrls\?\.\[0\]/);
+    assert.match(adminServices, /onError=\{\(\) => setFailed\(true\)\}/);
+    assert.doesNotMatch(adminServices, /via\.placeholder\.com/);
     assert.match(migration, /services_moderation_status_check/);
     assert.match(migration, /idx_services_public_catalog/);
 });
