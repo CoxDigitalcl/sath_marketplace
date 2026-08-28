@@ -85,12 +85,23 @@ export const markAsRead = async (req, res, next) => {
         const userId = req.user.id;
         const { id } = req.params;
 
-        await pool.query(
-            'UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2',
+        const result = await pool.query(
+            `UPDATE notifications
+             SET is_read = TRUE
+             WHERE id = $1 AND user_id = $2
+             RETURNING id, is_read`,
             [id, userId]
         );
 
-        res.json({ status: 'success' });
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                status: 'error',
+                code: 'NOTIFICATION_NOT_FOUND',
+                message: 'La notificación no existe o no pertenece al usuario.'
+            });
+        }
+
+        return res.json({ status: 'success', notification: result.rows[0] });
     } catch (err) {
         logger.error(`[MARK_READ] Error: ${err.message}`);
         next(err);
@@ -102,12 +113,15 @@ export const markAllAsRead = async (req, res, next) => {
     try {
         const userId = req.user.id;
 
-        await pool.query(
-            'UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE',
+        const result = await pool.query(
+            `UPDATE notifications
+             SET is_read = TRUE
+             WHERE user_id = $1 AND is_read = FALSE
+             RETURNING id`,
             [userId]
         );
 
-        res.json({ status: 'success' });
+        return res.json({ status: 'success', updatedCount: result.rowCount });
     } catch (err) {
         logger.error(`[MARK_ALL_READ] Error: ${err.message}`);
         next(err);
