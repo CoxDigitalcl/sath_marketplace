@@ -365,6 +365,86 @@ test('approval promotes exactly the pending update without activating an existin
     assert.equal(result.service.title, baseService.title);
 });
 
+test('approval fails closed when a reviewed local media file no longer exists', async () => {
+    const missingUrl = '/uploads/video-missing.mp4';
+    const pendingRevision = revisionRow({
+        proposed_snapshot: { ...baseService, video_url: missingUrl },
+    });
+    const harness = createHarness((sql) => {
+        if (sql.startsWith('SELECT service_id FROM service_revisions')) {
+            return { rows: [{ service_id: SERVICE_ID }] };
+        }
+        if (sql.startsWith('SELECT * FROM services')) return { rows: [{ ...baseService }] };
+        if (sql.startsWith('SELECT * FROM service_revisions')) return { rows: [pendingRevision] };
+        throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const checkedUrls = [];
+    const service = createServiceRevisionService({
+        pool: harness.pool,
+        mediaExists: (url) => {
+            checkedUrls.push(url);
+            return false;
+        },
+    });
+
+    await assert.rejects(
+        service.decideRevision({
+            revisionId: REVISION_ID,
+            expectedRevisionId: REVISION_ID,
+            adminId: ADMIN_ID,
+            decision: 'approved',
+        }),
+        (error) => error instanceof ServiceRevisionError &&
+            error.code === 'SERVICE_MEDIA_UNAVAILABLE' &&
+            error.statusCode === 409 &&
+            error.details.fields.includes('video_url')
+    );
+    assert.deepEqual(checkedUrls, [missingUrl]);
+    assert.equal(harness.calls.some(({ sql }) => sql.startsWith('UPDATE services SET')), false);
+    assert.equal(harness.calls.at(-1).sql, 'ROLLBACK');
+});
+
+test('approval does not recheck unchanged media during a classification-only review', async () => {
+    const pendingRevision = revisionRow({
+        review_scope: 'full',
+        pending_fields: ['category'],
+        changed_fields: ['category'],
+        proposed_snapshot: {
+            ...baseService,
+            category: 'Celebraciones',
+            video_url: '/uploads/old-missing-video.mp4',
+        },
+    });
+    const harness = createHarness((sql, params) => {
+        if (sql.startsWith('SELECT service_id FROM service_revisions')) return { rows: [{ service_id: SERVICE_ID }] };
+        if (sql.startsWith('SELECT * FROM services')) return { rows: [{ ...baseService }] };
+        if (sql.startsWith('SELECT * FROM service_revisions')) return { rows: [pendingRevision] };
+        if (sql.startsWith('UPDATE services SET')) {
+            return { rows: [{ ...baseService, category: params[0] }] };
+        }
+        if (sql.startsWith('INSERT INTO service_revision_decisions')) return { rows: [] };
+        if (sql.startsWith('UPDATE service_revisions SET')) return { rows: [{ ...pendingRevision, status: params[0] }] };
+        throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const service = createServiceRevisionService({
+        pool: harness.pool,
+        mediaExists: () => {
+            throw new Error('Unchanged media must not be checked.');
+        },
+    });
+
+    const result = await service.decideRevision({
+        revisionId: REVISION_ID,
+        expectedRevisionId: REVISION_ID,
+        adminId: ADMIN_ID,
+        decision: 'approved',
+        checklistItems: FULL_REVIEW_CHECKLIST_ITEMS,
+    });
+
+    assert.equal(result.revision.status, 'approved');
+    assert.equal(result.service.isActive, true);
+});
+
 test('does not allow a second admin decision after corrections were requested', async () => {
     const harness = createHarness((sql) => {
         if (sql.startsWith('SELECT service_id FROM service_revisions')) {
