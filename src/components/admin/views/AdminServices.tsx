@@ -1,8 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../../api/client';
 import { Service } from '../../../types';
-import { Search, Star, Filter, Loader, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Star, Filter, Loader, CheckCircle, XCircle, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const ServiceThumbnail: React.FC<{ service: Service }> = ({ service }) => {
+    const source = service.coverImageUrl || service.imageUrls?.[0];
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        setFailed(false);
+    }, [source]);
+
+    if (!source || failed) {
+        return (
+            <div
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-400"
+                title="Servicio sin imagen"
+                aria-label="Servicio sin imagen"
+            >
+                <ImageIcon size={18} aria-hidden="true" />
+            </div>
+        );
+    }
+
+    return (
+        <img
+            className="h-10 w-10 rounded-lg object-cover"
+            src={source}
+            alt={`Imagen de ${service.name}`}
+            onError={() => setFailed(true)}
+        />
+    );
+};
 
 const AdminServices: React.FC = () => {
     const [services, setServices] = useState<Service[]>([]);
@@ -67,7 +97,8 @@ const AdminServices: React.FC = () => {
                 toast.success(response.data.message);
             }
         } catch (error) {
-            toast.error('No se pudo actualizar la moderacion del servicio.');
+            const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+            toast.error(message || 'No se pudo actualizar la moderación del servicio.');
         }
     };
     const filteredServices = services.filter(service => {
@@ -136,7 +167,7 @@ const AdminServices: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
-                                            <img className="h-10 w-10 rounded-full object-cover" src={service.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" />
+                                            <ServiceThumbnail service={service} />
                                         </div>
                                         <div className="ml-4">
                                             <div className="text-sm font-medium text-gray-900">{service.name}</div>

@@ -970,6 +970,7 @@ export const getAdminServices = async (req, res, next) => {
             id: String(row.id),
             name: row.title,
             price_clp: row.price,
+            coverImageUrl: row.cover_image_url || '',
             imageUrls: row.image_urls || [],
             // Ensure provider object exists for the table display
             provider: {
@@ -1025,11 +1026,11 @@ export const moderateService = async (req, res, next) => {
                  moderation_reason = $2,
                  moderated_at = NOW(),
                  moderated_by = $3,
-                 is_active = ($1 = 'approved'),
+                 is_active = $5,
                  updated_at = NOW()
              WHERE id = $4
              RETURNING id, moderation_status, moderation_reason, moderated_at, is_active`,
-            [status, reason || null, req.user.id, id]
+            [status, reason || null, req.user.id, id, status === 'approved']
         );
 
         if (result.rows.length === 0) {
