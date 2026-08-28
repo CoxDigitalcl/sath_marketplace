@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Filter, Image as ImageIcon, Loader, RefreshCw, Search, ShieldAlert, Star } from 'lucide-react';
+import { AlertCircle, BookOpen, Filter, Image as ImageIcon, Loader, RefreshCw, Search, ShieldAlert, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../../api/client';
 import { Service } from '../../../types';
@@ -7,6 +7,7 @@ import ServiceRevisionReviewModal, {
     normalizeServiceRevisionSummary,
     ServiceRevisionSummary
 } from '../services/ServiceRevisionReviewModal';
+import ServiceModerationCriteriaDrawer from '../services/ServiceModerationCriteriaDrawer';
 
 interface AdminService extends Service {
     category?: string;
@@ -85,6 +86,7 @@ const AdminServices: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filter, setFilter] = useState<ServiceFilter>('all');
     const [reviewing, setReviewing] = useState<{ revisionId: string; service: AdminService } | null>(null);
+    const [criteriaOpen, setCriteriaOpen] = useState(false);
 
     const fetchRevisionQueue = useCallback(async () => {
         try {
@@ -185,10 +187,22 @@ const AdminServices: React.FC = () => {
                     <h1 className="text-2xl font-bold text-gray-800">Gestión de Servicios</h1>
                     <p className="mt-1 text-sm text-gray-600">Revisa únicamente los cambios que requieren una decisión administrativa.</p>
                 </div>
-                <button type="button" onClick={() => void fetchServices(false)} disabled={refreshing} className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto">
-                    <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
-                    {refreshing ? 'Actualizando…' : 'Actualizar'}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <button
+                        type="button"
+                        onClick={() => setCriteriaOpen(true)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+                        aria-haspopup="dialog"
+                        aria-expanded={criteriaOpen}
+                    >
+                        <BookOpen size={17} aria-hidden="true" />
+                        Criterios de moderación
+                    </button>
+                    <button type="button" onClick={() => void fetchServices(false)} disabled={refreshing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                        <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
+                        {refreshing ? 'Actualizando…' : 'Actualizar'}
+                    </button>
+                </div>
             </div>
 
             {servicesError && (
@@ -223,13 +237,21 @@ const AdminServices: React.FC = () => {
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="overflow-x-auto">
-                    <table className="min-w-[920px] divide-y divide-gray-200">
+                    <table className="w-full min-w-[920px] table-fixed divide-y divide-gray-200">
+                        <caption className="sr-only">Listado de Servicios, proveedores, precios y estado de moderación</caption>
+                        <colgroup>
+                            <col className="w-[32%]" />
+                            <col className="w-[19%]" />
+                            <col className="w-[11%]" />
+                            <col className="w-[10%]" />
+                            <col className="w-[28%]" />
+                        </colgroup>
                         <thead className="bg-gray-50"><tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Servicio</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Proveedor</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Precio</th>
-                            <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Staff Pick</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Moderación</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 xl:px-6">Servicio</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 xl:px-6">Proveedor</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 xl:px-6">Precio</th>
+                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 xl:px-6">Staff Pick</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 xl:px-6">Moderación</th>
                         </tr></thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {filteredServices.length === 0 && <tr><td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">{servicesError ? 'Actualiza la página para volver a intentar.' : 'No se encontraron Servicios para esta búsqueda o filtro.'}</td></tr>}
@@ -237,31 +259,31 @@ const AdminServices: React.FC = () => {
                                 const revision = revisionByServiceId.get(service.id);
                                 const category = service.category || service.categories?.map(item => item.subcategory).filter(Boolean).join(', ') || 'Sin categoría';
                                 return (
-                                    <tr key={service.id} className="align-middle hover:bg-gray-50/70">
-                                        <td className="px-6 py-4"><div className="flex items-center">
+                                    <tr key={service.id} className="align-middle transition-colors hover:bg-gray-50/70">
+                                        <td className="px-4 py-4 xl:px-6"><div className="flex w-full items-center">
                                             <div className="h-10 w-10 flex-shrink-0"><ServiceThumbnail service={service} /></div>
-                                            <div className="ml-4 min-w-0"><div className="max-w-xs truncate text-sm font-medium text-gray-900" title={service.name}>{service.name}</div><div className="max-w-xs truncate text-sm text-gray-500" title={category}>{category}</div></div>
+                                            <div className="ml-4 min-w-0 flex-1"><div className="truncate text-sm font-medium text-gray-900" title={service.name}>{service.name}</div><div className="truncate text-sm text-gray-500" title={category}>{category}</div></div>
                                         </div></td>
-                                        <td className="px-6 py-4"><div className="max-w-48 truncate text-sm text-gray-900" title={service.provider?.name || ''}>{service.provider?.name || 'Proveedor no informado'}</div></td>
-                                        <td className="whitespace-nowrap px-6 py-4"><div className="text-sm tabular-nums text-gray-900">${Number(service.price_clp || 0).toLocaleString('es-CL')}</div></td>
-                                        <td className="whitespace-nowrap px-6 py-4 text-center">
+                                        <td className="min-w-0 px-4 py-4 xl:px-6"><div className="truncate text-sm text-gray-900" title={service.provider?.name || ''}>{service.provider?.name || 'Proveedor no informado'}</div></td>
+                                        <td className="whitespace-nowrap px-4 py-4 xl:px-6"><div className="text-sm tabular-nums text-gray-900">${Number(service.price_clp || 0).toLocaleString('es-CL')}</div></td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-center xl:px-6">
                                             <button type="button" onClick={() => void toggleStaffPick(service.id, service.is_staff_pick || false)} className={`inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${service.is_staff_pick ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} aria-label={service.is_staff_pick ? `Quitar ${service.name} de Staff Pick` : `Marcar ${service.name} como Staff Pick`} aria-pressed={Boolean(service.is_staff_pick)}>
                                                 <Star size={20} fill={service.is_staff_pick ? 'currentColor' : 'none'} aria-hidden="true" />
                                             </button>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-4 py-4 xl:px-6">
                                             {revision ? (
-                                                <div className="flex min-w-56 flex-col items-start gap-2">
+                                                <div className="flex min-w-0 flex-col items-start gap-2">
                                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900"><ShieldAlert size={14} aria-hidden="true" />Requiere revisión</span>
-                                                    <p className="text-xs text-gray-600">{revisionSummaryText(revision)}</p>
+                                                    <p className="break-words text-xs text-gray-600">{revisionSummaryText(revision)}</p>
                                                     <button type="button" onClick={() => setReviewing({ revisionId: revision.id, service })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-brand-primary bg-white px-3 py-2 text-sm font-semibold text-brand-primary hover:bg-orange-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2">Revisar cambios</button>
                                                 </div>
                                             ) : service.moderation_status === 'approved' ? (
                                                 <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">Aprobado</span>
                                             ) : service.moderation_status === 'rejected' ? (
-                                                <div className="flex flex-col items-start gap-1"><span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">Rechazado</span>{service.moderation_reason && <p className="max-w-64 text-xs text-gray-600">{service.moderation_reason}</p>}</div>
+                                                <div className="flex min-w-0 flex-col items-start gap-1"><span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">Rechazado</span>{service.moderation_reason && <p className="break-words text-xs text-gray-600">{service.moderation_reason}</p>}</div>
                                             ) : service.moderation_status === 'pending' ? (
-                                                <div className="flex flex-col items-start gap-1"><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">Pendiente</span><p className="max-w-64 text-xs text-gray-600">Sin detalle verificable; no se puede decidir desde esta tabla.</p></div>
+                                                <div className="flex min-w-0 flex-col items-start gap-1"><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">Pendiente</span><p className="break-words text-xs text-gray-600">Sin detalle verificable; no se puede decidir desde esta tabla.</p></div>
                                             ) : (
                                                 <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">Sin revisión pendiente</span>
                                             )}
@@ -273,6 +295,11 @@ const AdminServices: React.FC = () => {
                     </table>
                 </div>
             </div>
+
+            <ServiceModerationCriteriaDrawer
+                open={criteriaOpen}
+                onClose={() => setCriteriaOpen(false)}
+            />
 
             <ServiceRevisionReviewModal
                 open={Boolean(reviewing)}
