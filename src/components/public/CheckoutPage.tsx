@@ -30,6 +30,7 @@ interface PublicPricingQuote {
     totalAmount: number;
     units: number;
     currency: 'CLP';
+    pricingVersion: number;
 }
 
 const parseServiceCommunes = (value: any): string[] => {
@@ -81,6 +82,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
     const [pricingQuote, setPricingQuote] = useState<PublicPricingQuote | null>(null);
     const [pricingLoading, setPricingLoading] = useState(true);
     const [pricingError, setPricingError] = useState('');
+    const [pricingRefreshKey, setPricingRefreshKey] = useState(0);
 
     // Detect if this is a freight booking
     const isFreight = !!freightData;
@@ -153,7 +155,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
             });
 
         return () => { active = false; };
-    }, [service?.id, quoteUnits]);
+    }, [service?.id, quoteUnits, pricingRefreshKey]);
 
     const handleGuestSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -193,6 +195,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
             if (isAuthenticated) {
                 const bookingPayload: any = {
                     service_id: service.id,
+                    expected_pricing_version: pricingQuote.pricingVersion,
                     scheduled_date: scheduledDate,
                     booking_date: booking.date,
                     selected_times: selectedTimesArray,
@@ -222,6 +225,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
             } else {
                 const guestPayload: any = {
                     service_id: service.id,
+                    expected_pricing_version: pricingQuote.pricingVersion,
                     scheduled_date: scheduledDate,
                     booking_date: booking.date,
                     selected_times: selectedTimesArray,
@@ -269,6 +273,16 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigateTo, service, bookin
             }
         } catch (err: any) {
             setProcessing(false);
+            if (err.response?.data?.code === 'PRICE_CHANGED') {
+                setPricingQuote(null);
+                setPricingError('El precio cambio mientras revisabas la reserva. Revisa el nuevo total antes de continuar.');
+                setPricingRefreshKey((current) => current + 1);
+                idempotencyKeyRef.current = globalThis.crypto?.randomUUID?.()
+                    || `booking-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                setStep(1);
+                toast.error('El precio del servicio cambio. Revisa el nuevo total antes de pagar.');
+                return;
+            }
             toast.error(err.response?.data?.message || err.message || 'Error al crear la reserva');
         }
     };

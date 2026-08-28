@@ -7,6 +7,7 @@ import {
     BookingIntegrityError,
     createBookingPaymentIntent,
     createGuestActorScope,
+    getBookingPaymentIntentReplay,
     normalizeBookingDate,
 } from '../services/bookingIntegrity.js';
 
@@ -61,6 +62,40 @@ const getPositiveNumberOrNull = (value) => {
 const getPositiveIntegerOrNull = (value) => {
     const parsed = getPositiveNumberOrNull(value);
     return parsed !== null && Number.isInteger(parsed) ? parsed : null;
+};
+
+const validateExpectedPricingVersion = (service, rawExpectedVersion) => {
+    if (!hasRequestValue(rawExpectedVersion)) {
+        return {
+            ok: false,
+            statusCode: 400,
+            code: 'PRICING_VERSION_REQUIRED',
+            message: 'Actualiza la cotización antes de confirmar la reserva.'
+        };
+    }
+
+    const expectedVersion = Number(rawExpectedVersion);
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+        return {
+            ok: false,
+            statusCode: 400,
+            code: 'INVALID_PRICING_VERSION',
+            message: 'La version de precio de la cotizacion no es valida.'
+        };
+    }
+
+    const currentVersion = Number(service?.pricing_version || 1);
+    if (expectedVersion !== currentVersion) {
+        return {
+            ok: false,
+            statusCode: 409,
+            code: 'PRICE_CHANGED',
+            message: 'El precio del servicio cambio. Revisa el nuevo total antes de pagar.',
+            pricingVersion: currentVersion
+        };
+    }
+
+    return { ok: true };
 };
 
 const sanitizeTextOrNull = (value, maxLength) => {
@@ -267,23 +302,49 @@ export const createBooking = async (req, res, next) => {
             scheduled_date,
             booking_date,
             service_commune,
+            expected_pricing_version,
             selected_times = [],
             freight_route,
             freight_logistics,
             total_override
         } = req.body;
 
+        const replay = await getBookingPaymentIntentReplay({
+            actorScope: `user:${clientId}`,
+            idempotencyKey: req.get('idempotency-key'),
+            requestPayload: req.body,
+        });
+        if (replay) {
+            res.set('Idempotent-Replay', 'true');
+            return res.status(replay.httpStatus).json(replay.body);
+        }
+
         // 1. Fetch Service Details
         const serviceRes = await pool.query(`
             SELECT s.*, p.coverage_region_code, p.coverage_region_name, p.coverage_communes
             FROM services s
             JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN users u ON s.provider_id = u.id
             WHERE s.id = $1
+              AND s.is_active = TRUE
+              AND s.moderation_status = 'approved'
+              AND p.is_verified = TRUE
+              AND COALESCE(u.is_blocked, FALSE) = FALSE
         `, [service_id]);
         if (serviceRes.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Service not found' });
         }
         const service = serviceRes.rows[0];
+
+        const pricingVersionValidation = validateExpectedPricingVersion(service, expected_pricing_version);
+        if (!pricingVersionValidation.ok) {
+            return res.status(pricingVersionValidation.statusCode).json({
+                status: 'error',
+                code: pricingVersionValidation.code,
+                message: pricingVersionValidation.message,
+                pricingVersion: pricingVersionValidation.pricingVersion
+            });
+        }
 
         // 2. Validate: Self-Booking Prevention
         if (service.provider_id === clientId) {
@@ -361,6 +422,7 @@ export const createBooking = async (req, res, next) => {
             bookingDate: normalizedBookingDate,
             selectedTimes: selected_times,
             service,
+            expectedPricingVersion: expected_pricing_version,
             allowFlexibleSchedule: Boolean(freightValidation.freightRoute),
             insertQuery,
             insertValues: (canonicalScheduledDate) => [
@@ -406,6 +468,7 @@ export const createGuestBooking = async (req, res, next) => {
             scheduled_date,
             booking_date,
             service_commune,
+            expected_pricing_version,
             guest_name,
             guest_email,
             guest_phone,
@@ -425,17 +488,43 @@ export const createGuestBooking = async (req, res, next) => {
             return res.status(400).json({ status: 'error', message: 'Formato de email inválido.' });
         }
 
+        const guestActorScope = createGuestActorScope(guest_email);
+        const replay = await getBookingPaymentIntentReplay({
+            actorScope: guestActorScope,
+            idempotencyKey: req.get('idempotency-key'),
+            requestPayload: req.body,
+        });
+        if (replay) {
+            res.set('Idempotent-Replay', 'true');
+            return res.status(replay.httpStatus).json(replay.body);
+        }
+
         // 1. Fetch Service Details
         const serviceRes = await pool.query(`
             SELECT s.*, p.coverage_region_code, p.coverage_region_name, p.coverage_communes
             FROM services s
             JOIN provider_profiles p ON s.provider_id = p.user_id
+            JOIN users u ON s.provider_id = u.id
             WHERE s.id = $1
+              AND s.is_active = TRUE
+              AND s.moderation_status = 'approved'
+              AND p.is_verified = TRUE
+              AND COALESCE(u.is_blocked, FALSE) = FALSE
         `, [service_id]);
         if (serviceRes.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Service not found' });
         }
         const service = serviceRes.rows[0];
+
+        const pricingVersionValidation = validateExpectedPricingVersion(service, expected_pricing_version);
+        if (!pricingVersionValidation.ok) {
+            return res.status(pricingVersionValidation.statusCode).json({
+                status: 'error',
+                code: pricingVersionValidation.code,
+                message: pricingVersionValidation.message,
+                pricingVersion: pricingVersionValidation.pricingVersion
+            });
+        }
 
         // MED-04: Validate provider is verified before accepting payment
         const providerCheck = await pool.query('SELECT is_verified FROM provider_profiles WHERE user_id = $1', [service.provider_id]);
@@ -502,12 +591,13 @@ export const createGuestBooking = async (req, res, next) => {
         `;
 
         const creation = await createBookingPaymentIntent({
-            actorScope: createGuestActorScope(guest_email),
+            actorScope: guestActorScope,
             idempotencyKey: req.get('idempotency-key'),
             requestPayload: req.body,
             bookingDate: normalizedBookingDate,
             selectedTimes: selected_times,
             service,
+            expectedPricingVersion: expected_pricing_version,
             allowFlexibleSchedule: Boolean(freightValidation.freightRoute),
             insertQuery,
             insertValues: (canonicalScheduledDate) => [

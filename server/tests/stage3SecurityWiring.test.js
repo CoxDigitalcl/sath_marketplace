@@ -98,24 +98,29 @@ test('public idea submission is rate limited, bounded and HTML escaped', () => {
     assert.match(routes, /const safeIdeaDesc = escapeHtml\(ideaDesc\)/);
 });
 
-test('new and edited services require admin moderation before publication', () => {
+test('new and risky Service changes use review records instead of blind moderation', () => {
     const controller = read('server/controllers/serviceController.js');
+    const revisionService = read('server/services/serviceRevisionService.js');
     const adminRoutes = read('server/routes/adminRoute.js');
     const adminServices = read('src/components/admin/views/AdminServices.tsx');
-    const migration = read('server/scripts/migrations/add_service_moderation.sql');
+    const migration = read('server/scripts/migrations/add_service_revisions.sql');
 
-    assert.match(controller, /false, 'pending'/);
-    assert.match(controller, /moderation_status = 'pending'/);
+    assert.match(controller, /createServiceWithInitialRevision/);
+    assert.match(controller, /recordServiceChanges/);
     assert.match(controller, /s\.moderation_status = 'approved'/);
     assert.match(controller, /export const moderateService/);
-    assert.match(controller, /is_active = \$5/);
-    assert.doesNotMatch(controller, /is_active = \(\$1 = 'approved'\)/);
+    assert.match(controller, /SERVICE_MODERATION_MOVED/);
+    assert.match(revisionService, /FALSE, 'pending'/);
+    assert.match(revisionService, /revisionRow\.revision_type === 'creation'/);
+    assert.doesNotMatch(revisionService, /is_active.*proposedChanges/);
     assert.match(adminRoutes, /router\.patch\('\/services\/:id\/moderation', moderateService\)/);
+    assert.match(adminRoutes, /router\.post\('\/service-revisions\/:revisionId\/decisions'/);
+    assert.match(adminServices, /\/admin\/service-revisions/);
     assert.match(adminServices, /service\.coverImageUrl \|\| service\.imageUrls\?\.\[0\]/);
     assert.match(adminServices, /onError=\{\(\) => setFailed\(true\)\}/);
     assert.doesNotMatch(adminServices, /via\.placeholder\.com/);
-    assert.match(migration, /services_moderation_status_check/);
-    assert.match(migration, /idx_services_public_catalog/);
+    assert.match(migration, /CREATE TABLE IF NOT EXISTS service_revisions/);
+    assert.match(migration, /service_revision_decisions/);
 });
 
 test('public catalog bounds query work and cache cardinality', () => {

@@ -24,20 +24,12 @@ test.afterEach(() => {
     pool.query = originalQuery;
 });
 
-test('approves and publishes a service without ambiguous PostgreSQL parameters', async () => {
-    const calls = [];
-    pool.query = async (sql, params) => {
-        calls.push({ sql: String(sql), params });
-        return {
-            rows: [{
-                id: SERVICE_ID,
-                moderation_status: 'approved',
-                moderation_reason: null,
-                is_active: true
-            }]
-        };
+test('disables blind service moderation in favor of revision decisions', async () => {
+    let queryCount = 0;
+    pool.query = async () => {
+        queryCount += 1;
+        return { rows: [] };
     };
-
     const res = responseRecorder();
     let nextError = null;
     await moderateService({
@@ -47,14 +39,12 @@ test('approves and publishes a service without ambiguous PostgreSQL parameters',
     }, res, (error) => { nextError = error; });
 
     assert.equal(nextError, null);
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.body.service.is_active, true);
-    assert.deepEqual(calls[0].params, ['approved', null, ADMIN_ID, SERVICE_ID, true]);
-    assert.match(calls[0].sql, /is_active = \$5/);
-    assert.doesNotMatch(calls[0].sql, /\$1 = 'approved'/);
+    assert.equal(res.statusCode, 410);
+    assert.equal(res.body.code, 'SERVICE_MODERATION_MOVED');
+    assert.equal(queryCount, 0);
 });
 
-test('requires a reason before rejecting a service', async () => {
+test('does not mutate through the retired rejection endpoint', async () => {
     let queryCount = 0;
     pool.query = async () => {
         queryCount += 1;
@@ -68,8 +58,8 @@ test('requires a reason before rejecting a service', async () => {
         user: { id: ADMIN_ID }
     }, res, () => {});
 
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.code, 'MODERATION_REASON_REQUIRED');
+    assert.equal(res.statusCode, 410);
+    assert.equal(res.body.code, 'SERVICE_MODERATION_MOVED');
     assert.equal(queryCount, 0);
 });
 

@@ -16,6 +16,7 @@
     "test:serial": "node --test --test-concurrency=1 server/tests/*.test.js",
     "security:migrate-private-uploads": "node server/scripts/migrate_private_uploads.js",
     "security:migrate-sessions": "node server/scripts/run_session_security_migration.js",
+    "db:migrate-service-revisions": "node server/scripts/run_service_revision_migration.js",
     "security:secrets": "node server/scripts/check_stage7_secrets.js",
     "validate:migrations": "node server/scripts/check_stage7_migrations.js",
     "seo:close-stage5b-content": "node server/scripts/close_stage5b_content_gate.js",

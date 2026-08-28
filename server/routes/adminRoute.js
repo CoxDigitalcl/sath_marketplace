@@ -50,6 +50,11 @@ import {
 
 import { getProviderDetails, getProviderServices, updateDocumentStatus, togglePayouts } from '../controllers/providerController.js';
 import { getAdminServices, getAdminPromotions, toggleStaffPick, moderateService, deletePromotion, updatePromotionStatus } from '../controllers/serviceController.js';
+import {
+    createServiceRevisionDecision,
+    getServiceRevisionDetail,
+    getServiceRevisionQueue,
+} from '../controllers/serviceRevisionController.js';
 import { blockClient, forcePasswordReset, deleteClientData, impersonateUser } from '../controllers/adminSecurityController.js';
 import { requireAdminStepUp } from '../middleware/adminStepUp.js';
 import { authenticateToken } from '../middleware/sessionAuth.js';
@@ -150,6 +155,9 @@ router.delete('/promotions/:id', deletePromotion);
 router.put('/promotions/:id', updatePromotionStatus);
 router.patch('/services/:id/staff-pick', toggleStaffPick);
 router.patch('/services/:id/moderation', moderateService);
+router.get('/service-revisions', getServiceRevisionQueue);
+router.get('/service-revisions/:revisionId', getServiceRevisionDetail);
+router.post('/service-revisions/:revisionId/decisions', createServiceRevisionDecision);
 
 // Promotion Tiers Management (Admin)
 router.get('/promotion-tiers', getPromotionTiers);
