@@ -8,9 +8,20 @@ interface VideoPlayerProps {
     autoPlay?: boolean;
     title?: string;
     transcript?: string;
+    errorTitle?: string;
+    errorDescription?: string;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, autoPlay = false, title = 'Video del servicio', transcript }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({
+    url,
+    className = "",
+    poster,
+    autoPlay = false,
+    title = 'Video del servicio',
+    transcript,
+    errorTitle = 'Error al cargar el video',
+    errorDescription
+}) => {
     const [error, setError] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -143,9 +154,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, className = "", poster, 
 
                 {error ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500">
-                        <div className="text-center">
+                        <div className="max-w-sm px-5 text-center">
                             <AlertCircle size={32} className="mx-auto mb-2 text-red-400" />
-                            <p className="text-sm">Error al cargar el video</p>
+                            <p className="text-sm font-medium text-gray-700">{errorTitle}</p>
+                            {errorDescription && <p className="mt-1 text-xs leading-5 text-gray-500">{errorDescription}</p>}
                         </div>
                     </div>
                 ) : (

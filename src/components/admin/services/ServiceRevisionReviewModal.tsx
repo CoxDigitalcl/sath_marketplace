@@ -69,6 +69,7 @@ const FIELD_LABELS: Record<string, string> = {
     duration_minutes: 'Duración',
     type: 'Modalidad',
     availability_type: 'Disponibilidad',
+    calendar_config: 'Agenda semanal',
     category: 'Categoría',
     categories: 'Categorías',
     categories_json: 'Categorías',
@@ -87,7 +88,8 @@ const FIELD_LABELS: Record<string, string> = {
     coverage_communes: 'Comunas de cobertura',
     pricing_type: 'Forma de cobro',
     freight_base_price: 'Tarifa base',
-    freight_price_per_km: 'Tarifa por kilómetro'
+    freight_price_per_km: 'Tarifa por kilómetro',
+    freight_max_distance_km: 'Distancia máxima de traslado'
 };
 
 const REVIEW_REASON_LABELS: Record<string, string> = {
@@ -97,7 +99,8 @@ const REVIEW_REASON_LABELS: Record<string, string> = {
     TEXT_EXTERNAL_LINK: 'Enlace externo detectado',
     TEXT_CONTACT_INFORMATION: 'Datos de contacto detectados',
     TEXT_OFF_PLATFORM_TRANSACTION: 'Posible transacción fuera de la plataforma',
-    TEXT_SUBSTANTIAL_CHANGE: 'Cambio sustancial de contenido'
+    TEXT_SUBSTANTIAL_CHANGE: 'Cambio sustancial de contenido',
+    LEGACY_PENDING_REVIEW: 'Servicio pendiente anterior al nuevo sistema'
 };
 
 const REASON_OPTIONS = [
@@ -287,6 +290,18 @@ const normalizeRevisionDetail = (raw: unknown): ServiceRevisionDetail | null => 
     };
 };
 
+const isLegacyPendingReview = (revision: ServiceRevisionDetail | null) => {
+    if (!revision) return false;
+    const reasons = [
+        ...revision.reasons,
+        ...revision.changes.flatMap(change => change.reasons)
+    ];
+    return reasons.some(reason => String(reason)
+        .trim()
+        .replace(/\s+/g, '_')
+        .toLocaleUpperCase('es-CL') === 'LEGACY_PENDING_REVIEW');
+};
+
 const getApiMessage = (error: unknown, fallback: string) => {
     const response = asRecord(asRecord(error).response);
     const data = asRecord(response.data);
@@ -297,9 +312,85 @@ const isMediaField = (field: string) => /(image|gallery|video|media)/i.test(fiel
 const isVideoField = (field: string) => /video/i.test(field);
 const isPriceField = (field: string) => /(price|precio|tarifa)/i.test(field);
 const isDurationField = (field: string) => /(duration|duraci)/i.test(field);
+const isCalendarField = (field: string) => field === 'calendar_config';
+
+const CODED_VALUE_LABELS: Record<string, Record<string, string>> = {
+    pricing_type: {
+        per_event: 'Por servicio o evento',
+        per_hour: 'Por hora',
+        fixed: 'Precio fijo'
+    },
+    type: {
+        online: 'En línea',
+        presencial: 'Presencial',
+        hibrido: 'Híbrido',
+        hybrid: 'Híbrido'
+    },
+    availability_type: {
+        agenda: 'Con agenda',
+        inmediato: 'Disponibilidad inmediata',
+        immediate: 'Disponibilidad inmediata',
+        '24h': 'Dentro de 24 horas',
+        quote: 'Sujeto a cotización'
+    }
+};
+
+const DAY_LABELS: Record<string, string> = {
+    lunes: 'Lunes',
+    martes: 'Martes',
+    miercoles: 'Miércoles',
+    jueves: 'Jueves',
+    viernes: 'Viernes',
+    sabado: 'Sábado',
+    domingo: 'Domingo'
+};
+
+const normalizeDayKey = (value: unknown) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('es-CL');
+
+const asStructuredValue = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return value;
+    }
+};
+
+interface AdminScheduleRow {
+    day: string;
+    active: boolean;
+    ranges: Array<{ start: string; end: string }>;
+}
+
+const normalizeSchedule = (value: unknown): AdminScheduleRow[] | null => {
+    const config = asRecord(asStructuredValue(value));
+    if (!Array.isArray(config.schedule)) return null;
+
+    return config.schedule.map((item, index) => {
+        const row = asRecord(item);
+        const dayKey = normalizeDayKey(row.day);
+        const ranges = Array.isArray(row.timeRanges)
+            ? row.timeRanges.map(range => {
+                const values = asRecord(range);
+                return { start: String(values.start || ''), end: String(values.end || '') };
+            }).filter(range => range.start && range.end)
+            : [];
+        return {
+            day: DAY_LABELS[dayKey] || String(row.day || `Día ${index + 1}`),
+            active: row.active === true || (row.active !== false && ranges.length > 0),
+            ranges
+        };
+    });
+};
 
 const formatValue = (value: unknown, field: string) => {
     if (value === null || value === undefined || value === '') return 'Sin información';
+    const codedLabel = CODED_VALUE_LABELS[field]?.[String(value).toLocaleLowerCase('es-CL')];
+    if (codedLabel) return codedLabel;
     if (typeof value === 'boolean') return value ? 'Sí' : 'No';
     if (typeof value === 'number' && isPriceField(field)) {
         return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
@@ -314,6 +405,35 @@ const formatValue = (value: unknown, field: string) => {
     }
     if (typeof value === 'object') return JSON.stringify(value, null, 2);
     return String(value);
+};
+
+const WeeklyScheduleValue: React.FC<{ value: unknown }> = ({ value }) => {
+    const schedule = normalizeSchedule(value);
+    if (!schedule) {
+        return <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-900">{formatValue(value, 'calendar_config')}</p>;
+    }
+    if (schedule.length === 0) return <p className="text-sm italic text-gray-500">Sin días configurados</p>;
+
+    return (
+        <dl className="divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200 bg-white">
+            {schedule.map((row, index) => (
+                <div key={`${row.day}-${index}`} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <dt className="text-sm font-semibold text-gray-800">{row.day}</dt>
+                    <dd className="flex flex-wrap gap-1.5 text-sm sm:justify-end">
+                        {!row.active ? (
+                            <span className="text-gray-500">No disponible</span>
+                        ) : row.ranges.length === 0 ? (
+                            <span className="text-amber-700">Horario no informado</span>
+                        ) : row.ranges.map((range, rangeIndex) => (
+                            <span key={`${range.start}-${range.end}-${rangeIndex}`} className="rounded-full bg-sky-50 px-2.5 py-1 font-medium tabular-nums text-sky-800">
+                                {range.start}–{range.end}
+                            </span>
+                        ))}
+                    </dd>
+                </div>
+            ))}
+        </dl>
+    );
 };
 
 const isSafeAdminMediaUrl = (value: string, video: boolean) => {
@@ -345,6 +465,33 @@ const collectMediaUrls = (value: unknown, field: string): Array<{ url: string; t
     return result.filter(item => isSafeAdminMediaUrl(item.url, isVideoField(field) || item.type === 'video'));
 };
 
+const MissingMediaNotice: React.FC<{ kind: 'imagen' | 'video' }> = ({ kind }) => (
+    <div className="flex aspect-video w-full items-center justify-center bg-gray-100 px-5 text-center text-gray-600" role="status">
+        <div className="max-w-sm">
+            <AlertCircle size={32} className="mx-auto mb-2 text-red-400" aria-hidden="true" />
+            <p className="text-sm font-semibold text-gray-800">Archivo de {kind} no disponible</p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">El archivo referenciado no existe o ya no está accesible. Solicita al proveedor que lo reemplace antes de aprobar.</p>
+        </div>
+    </div>
+);
+
+const AdminImagePreview: React.FC<{ url: string; alt: string }> = ({ url, alt }) => {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [url]);
+
+    if (failed) return <MissingMediaNotice kind="imagen" />;
+    return (
+        <img
+            src={url}
+            alt={alt}
+            className="aspect-video w-full bg-gray-100 object-contain"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+        />
+    );
+};
+
 const MediaValue: React.FC<{ value: unknown; field: string; label: string }> = ({ value, field, label }) => {
     const media = collectMediaUrls(value, field);
     if (media.length === 0) return <p className="text-sm italic text-gray-500">Sin recurso</p>;
@@ -360,15 +507,11 @@ const MediaValue: React.FC<{ value: unknown; field: string; label: string }> = (
                                 url={item.url}
                                 className="w-full"
                                 title={`${label}${media.length > 1 ? ` ${index + 1}` : ''}`}
+                                errorTitle="Archivo de video no disponible"
+                                errorDescription="El archivo referenciado no existe o ya no está accesible. Solicita al proveedor que lo reemplace antes de aprobar."
                             />
                         ) : (
-                            <img
-                                src={item.url}
-                                alt={`${label}${media.length > 1 ? ` ${index + 1}` : ''}`}
-                                className="aspect-video w-full bg-gray-100 object-contain"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                            />
+                            <AdminImagePreview url={item.url} alt={`${label}${media.length > 1 ? ` ${index + 1}` : ''}`} />
                         )}
                         <a
                             href={item.url}
@@ -400,7 +543,9 @@ const ValuePanel: React.FC<{
     return (
         <section className={`min-w-0 rounded-xl border p-4 ${styles}`} aria-label={title}>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">{title}</p>
-            {isMediaField(field) ? (
+            {isCalendarField(field) ? (
+                <WeeklyScheduleValue value={value} />
+            ) : isMediaField(field) ? (
                 <MediaValue value={value} field={field} label={`${title}: ${labelForField(field)}`} />
             ) : (
                 <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-900">{formatValue(value, field)}</p>
@@ -409,12 +554,16 @@ const ValuePanel: React.FC<{
     );
 };
 
-const FullServiceReview: React.FC<{ snapshot: Record<string, unknown> }> = ({ snapshot }) => {
+const FullServiceReview: React.FC<{ snapshot: Record<string, unknown>; panelTitle?: string }> = ({
+    snapshot,
+    panelTitle = 'Versión propuesta'
+}) => {
     const preferredFields = [
         'title', 'name', 'description', 'category', 'categories', 'categories_json', 'subcategory',
-        'price', 'price_clp', 'duration_minutes', 'pricing_type', 'type', 'availability_type',
+        'price', 'price_clp', 'duration_minutes', 'pricing_type', 'type', 'availability_type', 'calendar_config',
         'coverage_area', 'coverage_region_name', 'coverage_communes', 'features', 'video_url', 'videoUrl',
-        'cover_image_url', 'coverImageUrl', 'image_urls', 'imageUrls', 'gallery_media', 'galleryMedia'
+        'cover_image_url', 'coverImageUrl', 'image_urls', 'imageUrls', 'gallery_media', 'galleryMedia',
+        'freight_base_price', 'freight_price_per_km', 'freight_max_distance_km'
     ];
     const fields = preferredFields.filter(field => Object.prototype.hasOwnProperty.call(snapshot, field));
 
@@ -429,9 +578,9 @@ const FullServiceReview: React.FC<{ snapshot: Record<string, unknown> }> = ({ sn
     return (
         <div className="grid gap-4 sm:grid-cols-2">
             {fields.map(field => (
-                <div key={field} className={field === 'description' || isMediaField(field) ? 'sm:col-span-2' : ''}>
+                <div key={field} className={field === 'description' || isMediaField(field) || isCalendarField(field) ? 'sm:col-span-2' : ''}>
                     <p className="mb-1.5 text-sm font-semibold text-gray-800">{labelForField(field)}</p>
-                    <ValuePanel value={snapshot[field]} field={field} tone="neutral" title="Versión propuesta" />
+                    <ValuePanel value={snapshot[field]} field={field} tone="neutral" title={panelTitle} />
                 </div>
             ))}
         </div>
@@ -467,6 +616,7 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
             const normalized = normalizeRevisionDetail(response.data);
             if (!normalized) throw new Error('INVALID_REVISION_PAYLOAD');
             setDetail(normalized);
+            setShowFullReview(isLegacyPendingReview(normalized));
         } catch (error) {
             setDetail(null);
             setLoadError(getApiMessage(error, 'No se pudo cargar el detalle de esta revisión.'));
@@ -494,6 +644,7 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
 
     const serviceName = detail?.serviceName || service?.name || 'Servicio';
     const providerName = detail?.providerName || service?.providerName;
+    const legacyReview = isLegacyPendingReview(detail);
     const reasonRequired = decisionIntent === 'REQUEST_CHANGES' || decisionIntent === 'REJECT';
     const fullApprovalChecklistComplete = detail?.scope !== 'full'
         || FULL_REVIEW_CHECKLIST.every(item => checklistItems.includes(item.id));
@@ -622,6 +773,11 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
                                                     Revisión completa
                                                 </span>
                                             )}
+                                            {legacyReview && (
+                                                <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                                    Revisión de compatibilidad
+                                                </span>
+                                            )}
                                         </div>
                                         <Dialog.Title className="truncate text-xl font-bold text-gray-900 sm:text-2xl">
                                             {serviceName}
@@ -670,41 +826,58 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
 
                                     {!loading && detail && (
                                         <div className="space-y-6">
-                                            <section aria-labelledby="revision-changes-heading">
-                                                <div className="mb-4">
-                                                    <h3 id="revision-changes-heading" className="text-lg font-bold text-gray-900">
-                                                        Qué cambió
-                                                    </h3>
-                                                    <p className="mt-1 text-sm text-gray-600">
-                                                        Compara la versión publicada con la propuesta antes de decidir.
-                                                    </p>
-                                                </div>
+                                            {legacyReview ? (
+                                                <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 sm:p-5" aria-labelledby="legacy-review-heading">
+                                                    <div className="flex items-start gap-3">
+                                                        <ShieldAlert className="mt-0.5 flex-none text-sky-700" size={22} aria-hidden="true" />
+                                                        <div>
+                                                            <h3 id="legacy-review-heading" className="font-bold text-sky-950">Revisión inicial de un Servicio existente</h3>
+                                                            <p className="mt-1 text-sm leading-6 text-sky-900">
+                                                                Este Servicio ya estaba pendiente cuando se habilitó el nuevo sistema de moderación. No existe un historial confiable para comparar, por lo que no se muestran diferencias artificiales: debes revisar la ficha completa actual.
+                                                            </p>
+                                                            <p className="mt-2 text-sm leading-6 text-sky-900">
+                                                                Este formato solo corresponde a registros heredados. Aprobar valida su contenido, pero no activa automáticamente el Servicio; el proveedor podrá activarlo después.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </section>
+                                            ) : (
+                                                <section aria-labelledby="revision-changes-heading">
+                                                    <div className="mb-4">
+                                                        <h3 id="revision-changes-heading" className="text-lg font-bold text-gray-900">
+                                                            Qué cambió
+                                                        </h3>
+                                                        <p className="mt-1 text-sm text-gray-600">
+                                                            Compara la versión publicada con la propuesta antes de decidir.
+                                                        </p>
+                                                    </div>
 
-                                                {detail.changes.length === 0 ? (
-                                                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-                                                        La revisión está pendiente, pero la API no informó diferencias. No apruebes hasta contar con el detalle verificable.
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-5">
-                                                        {detail.changes.map(change => (
-                                                            <article key={change.field} className="rounded-2xl border border-gray-200 p-4 sm:p-5">
-                                                                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                                                                    <h4 className="font-bold text-gray-900">{change.label || labelForField(change.field)}</h4>
-                                                                    {change.reasons.map(reason => (
-                                                                        <span key={reason} className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
-                                                                            {labelForReviewReason(reason)}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                                <div className="grid gap-3 md:grid-cols-2">
-                                                                    <ValuePanel value={change.before} field={change.field} tone="before" title="Versión publicada" />
-                                                                    <ValuePanel value={change.after} field={change.field} tone="after" title="Cambio propuesto" />
-                                                                </div>
-                                                            </article>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </section>
+                                                    {detail.changes.length === 0 ? (
+                                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+                                                            La revisión está pendiente, pero la API no informó diferencias. No apruebes hasta contar con el detalle verificable.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-5">
+                                                            {detail.changes.map(change => (
+                                                                <article key={change.field} className="rounded-2xl border border-gray-200 p-4 sm:p-5">
+                                                                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                                                                        <h4 className="font-bold text-gray-900">{change.label || labelForField(change.field)}</h4>
+                                                                        {change.reasons.map(reason => (
+                                                                            <span key={reason} className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
+                                                                                {labelForReviewReason(reason)}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                                        <ValuePanel value={change.before} field={change.field} tone="before" title="Versión publicada" />
+                                                                        <ValuePanel value={change.after} field={change.field} tone="after" title="Cambio propuesto" />
+                                                                    </div>
+                                                                </article>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </section>
+                                            )}
 
                                             <section className="border-t border-gray-200 pt-5" aria-labelledby="full-review-heading">
                                                 <button
@@ -716,7 +889,7 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
                                                 >
                                                     <span className="flex items-center gap-2">
                                                         <FileSearch size={20} className="text-brand-primary" aria-hidden="true" />
-                                                        Revisar Servicio completo
+                                                        {showFullReview ? 'Ocultar ficha completa' : 'Revisar Servicio completo'}
                                                     </span>
                                                     {showFullReview
                                                         ? <ChevronUp size={20} aria-hidden="true" />
@@ -724,11 +897,18 @@ const ServiceRevisionReviewModal: React.FC<ServiceRevisionReviewModalProps> = ({
                                                 </button>
                                                 {showFullReview && (
                                                     <div id="full-service-review" className="mt-4">
-                                                        <h3 id="full-review-heading" className="mb-1 text-lg font-bold text-gray-900">Ficha completa propuesta</h3>
+                                                        <h3 id="full-review-heading" className="mb-1 text-lg font-bold text-gray-900">
+                                                            {legacyReview ? 'Ficha completa actual' : 'Ficha completa propuesta'}
+                                                        </h3>
                                                         <p className="mb-4 text-sm text-gray-600">
-                                                            Esta vista amplía el contexto; no aprueba el Servicio automáticamente.
+                                                            {legacyReview
+                                                                ? 'Esta es la ficha actual que debes comprobar antes de tomar una decisión.'
+                                                                : 'Esta vista amplía el contexto; no aprueba el Servicio automáticamente.'}
                                                         </p>
-                                                        <FullServiceReview snapshot={detail.proposedSnapshot} />
+                                                        <FullServiceReview
+                                                            snapshot={detail.proposedSnapshot}
+                                                            panelTitle={legacyReview ? 'Contenido actual' : 'Versión propuesta'}
+                                                        />
                                                     </div>
                                                 )}
                                             </section>

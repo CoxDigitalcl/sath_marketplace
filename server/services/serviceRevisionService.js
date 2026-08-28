@@ -1,4 +1,7 @@
+import { statSync } from 'node:fs';
+import path from 'node:path';
 import { pool as defaultPool } from '../config/db.js';
+import { uploadDir } from '../config/uploadPaths.js';
 import {
     SERVICE_CHANGE_FIELDS,
     SERVICE_PRICING_FIELDS,
@@ -18,6 +21,7 @@ export const FULL_REVIEW_CHECKLIST_ITEMS = Object.freeze([
 const FULL_REVIEW_CHECKLIST_ITEM_SET = new Set(FULL_REVIEW_CHECKLIST_ITEMS);
 const SERVICE_CHANGE_FIELD_SET = new Set(SERVICE_CHANGE_FIELDS);
 const SERVICE_PRICING_FIELD_SET = new Set(SERVICE_PRICING_FIELDS);
+const SERVICE_MEDIA_FIELDS = new Set(['video_url', 'cover_image_url', 'image_urls', 'gallery_media']);
 const JSON_SERVICE_FIELDS = new Set([
     'calendar_config',
     'features',
@@ -26,6 +30,7 @@ const JSON_SERVICE_FIELDS = new Set([
     'gallery_media',
 ]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const LOCAL_UPLOAD_PATTERN = /^\/uploads\/[A-Za-z0-9/_\-.%]+$/u;
 
 const parseJson = (value, fallback) => {
     if (value && typeof value === 'object') return value;
@@ -45,6 +50,44 @@ const asArray = (value) => {
 const asObject = (value) => {
     const parsed = parseJson(value, {});
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+};
+
+const collectReviewedLocalMedia = (snapshot, fields) => {
+    const references = [];
+    const add = (field, value) => {
+        if (typeof value === 'string' && LOCAL_UPLOAD_PATTERN.test(value) && !value.includes('..')) {
+            references.push({ field, url: value });
+        }
+    };
+
+    for (const field of fields) {
+        if (!SERVICE_MEDIA_FIELDS.has(field)) continue;
+        const value = snapshot[field];
+        if (field === 'video_url' || field === 'cover_image_url') {
+            add(field, value);
+        } else if (field === 'image_urls') {
+            asArray(value).forEach(item => add(field, item));
+        } else if (field === 'gallery_media') {
+            asArray(value).forEach(item => {
+                const media = asObject(item);
+                add(field, media.url);
+                add(field, media.thumbnail);
+            });
+        }
+    }
+    return references;
+};
+
+const defaultMediaExists = (url) => {
+    try {
+        const relativePath = decodeURIComponent(url.slice('/uploads/'.length));
+        const root = path.resolve(uploadDir);
+        const target = path.resolve(root, relativePath);
+        const rootPrefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+        return target.startsWith(rootPrefix) && statSync(target).isFile();
+    } catch {
+        return false;
+    }
 };
 
 const normalizeIdentifier = (value, fieldName) => {
@@ -126,9 +169,12 @@ export class ServiceRevisionError extends Error {
     }
 }
 
-export const createServiceRevisionService = ({ pool = defaultPool } = {}) => {
+export const createServiceRevisionService = ({ pool = defaultPool, mediaExists = defaultMediaExists } = {}) => {
     if (!pool || typeof pool.query !== 'function') {
         throw new TypeError('createServiceRevisionService requires a PostgreSQL pool.');
+    }
+    if (typeof mediaExists !== 'function') {
+        throw new TypeError('createServiceRevisionService requires a media existence checker.');
     }
 
     const withTransaction = async (work) => {
@@ -643,6 +689,19 @@ export const createServiceRevisionService = ({ pool = defaultPool } = {}) => {
             let publicService = serviceResult.rows[0];
             if (normalizedDecision === 'approved') {
                 const proposedSnapshot = asObject(revisionRow.proposed_snapshot);
+                const missingMediaFields = [...new Set(
+                    collectReviewedLocalMedia(proposedSnapshot, pendingFields)
+                        .filter(reference => !mediaExists(reference.url))
+                        .map(reference => reference.field)
+                )];
+                if (missingMediaFields.length > 0) {
+                    throw new ServiceRevisionError(
+                        'SERVICE_MEDIA_UNAVAILABLE',
+                        'Uno o más recursos multimedia de esta revisión ya no están disponibles. Solicita al proveedor que los reemplace antes de aprobar.',
+                        409,
+                        { fields: missingMediaFields }
+                    );
+                }
                 const values = [];
                 const assignments = assignSql({
                     fields: pendingFields,

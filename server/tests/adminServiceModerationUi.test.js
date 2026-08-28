@@ -51,3 +51,25 @@ test('the reference covers every class enforced by the Service change policy', (
     assert.deepEqual(byPolicy('targeted_review'), ['cover_image_url', 'gallery_media', 'image_urls', 'video_url']);
     assert.deepEqual(byPolicy('full_review'), ['categories_json', 'category', 'type']);
 });
+
+test('legacy Service reviews explain their origin instead of showing artificial differences', () => {
+    const modal = read('src/components/admin/services/ServiceRevisionReviewModal.tsx');
+
+    assert.match(modal, /LEGACY_PENDING_REVIEW: 'Servicio pendiente anterior al nuevo sistema'/);
+    assert.match(modal, /Revisión inicial de un Servicio existente/);
+    assert.match(modal, /No existe un historial confiable para comparar/);
+    assert.match(modal, /legacyReview \? \(/);
+    assert.match(modal, /setShowFullReview\(isLegacyPendingReview\(normalized\)\)/);
+});
+
+test('technical Service values have readable admin representations and explicit media failures', () => {
+    const modal = read('src/components/admin/services/ServiceRevisionReviewModal.tsx');
+    const videoPlayer = read('src/components/common/VideoPlayer.tsx');
+
+    assert.match(modal, /calendar_config: 'Agenda semanal'/);
+    assert.match(modal, /per_event: 'Por servicio o evento'/);
+    assert.match(modal, /<WeeklyScheduleValue value=\{value\} \/>/);
+    assert.match(modal, /Archivo de \{kind\} no disponible/);
+    assert.match(modal, /errorTitle="Archivo de video no disponible"/);
+    assert.match(videoPlayer, /errorDescription\?: string/);
+});
