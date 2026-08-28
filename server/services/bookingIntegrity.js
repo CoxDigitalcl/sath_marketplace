@@ -277,6 +277,36 @@ const responseFromStoredIdempotency = (row) => {
     };
 };
 
+export const getBookingPaymentIntentReplay = async ({
+    actorScope,
+    idempotencyKey: rawIdempotencyKey,
+    requestPayload,
+    pool = defaultPool,
+}) => {
+    const idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
+    if (typeof actorScope !== 'string' || actorScope.length < 3 || actorScope.length > 160) {
+        throw new BookingIntegrityError('INVALID_BOOKING_ACTOR', 'No se pudo identificar al solicitante.', 400);
+    }
+
+    const requestHash = hashBookingRequest({ actorScope, payload: requestPayload });
+    const existing = await pool.query(
+        `SELECT request_hash, state, http_status, response_json
+         FROM booking_idempotency
+         WHERE actor_scope = $1 AND idempotency_key = $2`,
+        [actorScope, idempotencyKey]
+    );
+    const row = existing.rows[0];
+    if (!row) return null;
+    if (row.request_hash !== requestHash) {
+        throw new BookingIntegrityError(
+            'IDEMPOTENCY_KEY_REUSED',
+            'La clave de idempotencia ya fue usada con datos diferentes.',
+            409
+        );
+    }
+    return responseFromStoredIdempotency(row);
+};
+
 const beginIdempotentRequest = async ({
     client,
     actorScope,
@@ -359,6 +389,7 @@ export const createBookingPaymentIntent = async ({
     bookingDate,
     selectedTimes,
     service,
+    expectedPricingVersion,
     allowFlexibleSchedule = false,
     insertQuery,
     insertValues,
@@ -397,6 +428,35 @@ export const createBookingPaymentIntent = async ({
         if (replay) {
             await client.query('COMMIT');
             return replay;
+        }
+
+        const lockedService = await client.query(
+            `SELECT s.pricing_version
+             FROM services s
+             JOIN provider_profiles p ON p.user_id = s.provider_id
+             JOIN users u ON u.id = s.provider_id
+             WHERE s.id = $1
+               AND s.provider_id = $2
+               AND s.is_active = TRUE
+               AND s.moderation_status = 'approved'
+               AND p.is_verified = TRUE
+               AND COALESCE(u.is_blocked, FALSE) = FALSE
+             FOR SHARE OF s, p, u`,
+            [service.id, service.provider_id]
+        );
+        if (lockedService.rows.length !== 1) {
+            throw new BookingIntegrityError(
+                'SERVICE_UNAVAILABLE',
+                'El Servicio dejó de estar disponible. Actualiza la página antes de continuar.',
+                409
+            );
+        }
+        if (Number(lockedService.rows[0].pricing_version || 1) !== Number(expectedPricingVersion)) {
+            throw new BookingIntegrityError(
+                'PRICE_CHANGED',
+                'El precio del Servicio cambió. Revisa el nuevo total antes de pagar.',
+                409
+            );
         }
 
         const bookingResult = await client.query(insertQuery, insertValues(scheduledDate));
@@ -656,6 +716,7 @@ export default {
     confirmBookingSlots,
     createBookingPaymentIntent,
     createGuestActorScope,
+    getBookingPaymentIntentReplay,
     hashBookingRequest,
     normalizeBookingDate,
     normalizeIdempotencyKey,

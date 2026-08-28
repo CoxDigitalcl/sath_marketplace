@@ -65,6 +65,14 @@ Con `NODE_ENV=production`, la API sirve el frontend generado desde `dist`. El pr
 
 Antes de habilitar el nuevo procesamiento de pagos se debe aplicar una vez la migración [`server/scripts/migrations/add_payku_payment_integrity.sql`](server/scripts/migrations/add_payku_payment_integrity.sql). El primer despliegue debe mantener `ENABLE_PAYMENT_OUTBOX_WORKER=false` hasta completar la validación controlada de Payku.
 
+Antes de desplegar la moderación diferencial de Servicios se debe aplicar la migración expansiva e idempotente [`server/scripts/migrations/add_service_revisions.sql`](server/scripts/migrations/add_service_revisions.sql):
+
+```bash
+npm run db:migrate-service-revisions
+```
+
+El esquema debe publicarse antes que el código. La migración conserva las filas de `services`, crea una línea base versionada y prepara una revisión completa para los Servicios legados que ya estaban pendientes. Productos no forma parte de este flujo.
+
 ## Seguridad de configuración
 
 - Configura secretos exclusivamente mediante `server/.env` o el gestor de secretos del servidor.
