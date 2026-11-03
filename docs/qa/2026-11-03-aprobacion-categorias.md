@@ -83,7 +83,8 @@ de moderación y la comprobación de existencia de archivos multimedia.
   Esta dependencia real justifica una calificación hospedada del PR y la ejecución
   existente de `main` posterior, sin modificar permisos, workflows ni protecciones.
 - No se añaden artifacts ni almacenamiento hospedado; únicamente el bundle estático
-  versionado que cPanel ya sirve. No hay migración ni cambio de dependencias o flags.
+  versionado que cPanel ya sirve. No hay migración ni cambio de flags. La revisión
+  posterior del audit requirió actualizar dependencias, como se detalla abajo.
 - Reversión preparada: revertir el commit de la entrega, integrar y actualizar cPanel
   por fast-forward; no se requiere restauración de datos ni `reset --hard`.
 - Validación de la entrega reconciliada: lint, TypeScript, secretos, migraciones y
@@ -95,6 +96,33 @@ de moderación y la comprobación de existencia de archivos multimedia.
 - Smoke público previo: 7/7 comprobaciones pasan, incluido health con DB y cabeceras.
 - Estado previo: `NODE_ENV=production`, `PAYKU_MODE=sandbox`; worker del outbox
   no habilitado por una variable explícita. No se modifica configuración operativa.
+
+### Dependencias necesarias para superar la protección vigente
+
+La auditoría actual del lockfile anterior encontró 1 alerta crítica y 9 altas
+(los checks históricos de `main` eran del 2026-08-28). Se detuvo la integración
+antes de ejecutar CI hospedada y se preparó la corrección local.
+
+- Actualizaciones compatibles del lockfile, incluido `proxy-addr` 2.0.8, sin
+  `npm audit fix --force`, overrides de seguridad ni supresión de advisories.
+- Las dos alertas altas restantes exigían Nodemailer 10.3.1 y Zod 4.6.7.
+  Se comprobaron sus fuentes oficiales: [Nodemailer 10](https://github.com/nodemailer/nodemailer/releases/tag/v10.0.0),
+  [migración Zod 4](https://zod.dev/v4/changelog),
+  [aviso Zod](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) y
+  [aviso proxy-addr](https://github.com/advisories/GHSA-jqcg-44mw-7w3h).
+- Nodemailer 10 requiere Node >=20, compatible con el runtime de cPanel.
+- Adaptación de Zod en dos archivos: `errorMap` pasa a `error`, `ZodError.errors`
+  a `issues`, y `z.record` declara expresamente la clave de texto.
+- Cinco pruebas adicionales cubren roles permitidos, respuestas 400 de autenticación,
+  avance de login válido, restricciones de contraseñas/step-up, configuración de agenda
+  y composición real de correo en memoria sin envío externo.
+- Suite final: 226/226 pruebas pasan sin omisiones (10,69 s), incluidas las pruebas
+  PostgreSQL y las de compatibilidad. Lint, TypeScript, secretos y presupuesto pasan;
+  build regenerado con el lockfile final (10,13 s).
+- Audit final: 0 críticas, 0 altas; quedan 9 moderadas en herramientas de desarrollo.
+  `npm audit --audit-level=high` pasa. No se afirma que el árbol esté libre de alertas.
+- El despliegue debe instalar el lockfile final con el Node de la aplicación antes
+  de reiniciar Passenger. Una reversión también debe reinstalar el lockfile anterior.
 
 La comprobación del formulario usa datos de prueba; no equivale a una validación
 en la cuenta real del cliente. Queda pendiente la comprobación funcional después

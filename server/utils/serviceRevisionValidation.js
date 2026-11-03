@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const MAX_POSTGRES_INTEGER = 2147483647;
-const boundedJsonObject = (label, maxBytes = 100_000) => z.record(z.unknown())
+const boundedJsonObject = (label, maxBytes = 100_000) => z.record(z.string(), z.unknown())
     .refine((value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= maxBytes, {
         message: `${label} excede el tamaño permitido`,
     });
