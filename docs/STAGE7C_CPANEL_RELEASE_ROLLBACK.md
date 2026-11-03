@@ -1,5 +1,16 @@
 # Runbook 7C — release y rollback en cPanel
 
+> Actualización 2026-11-03: rige el acuerdo de entrega proporcional del usuario
+> del 2026-10-25. Los requisitos generales históricos de CI hospedada y de `main`
+> que aparecen abajo se conservan como historia; no son requisitos universales.
+> Verificar la rama que usa el entorno y sus protecciones antes de cada publicación.
+> Usar validación local pertinente y el mecanismo existente, sin agregar workflows
+> ni artifacts por defecto. Para esta entrega cPanel usa `main` y GitHub exige
+> efectivamente `Quality gate` y `Clean schema` (administradores incluidos).
+> Se respetan esos checks vigentes; no se alteran protecciones ni se simula su éxito.
+> El procedimiento acotado y la evidencia están en
+> [la revisión del 2026-11-03](qa/2026-11-03-aprobacion-categorias.md).
+
 ## Alcance y reglas
 
 La aplicación Node.js y el repositorio administrado por cPanel comparten la ruta:

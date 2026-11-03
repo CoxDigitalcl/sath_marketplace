@@ -381,6 +381,7 @@ export const createServiceRevisionService = ({ pool = defaultPool, mediaExists =
             const revisionNumber = Number(sequenceResult.rows[0]?.next_revision_number || 1);
             const status = classification.pendingFields.length > 0 ? 'pending' : 'applied';
 
+            // The status parameter is also compared in CASE; pin varchar to avoid PostgreSQL 42P08.
             const inserted = await client.query(
                 `INSERT INTO service_revisions (
                     service_id,
@@ -398,7 +399,7 @@ export const createServiceRevisionService = ({ pool = defaultPool, mediaExists =
                     base_service_updated_at,
                     applied_at
                  ) VALUES (
-                    $1, $2, $3, $4, $5, $6,
+                    $1, $2, $3, $4, $5::varchar, $6,
                     $7::jsonb, $8::jsonb, $9::text[], $10::text[], $11::text[], $12::jsonb,
                     $13, CASE WHEN $5 = 'applied' THEN CURRENT_TIMESTAMP ELSE NULL END
                  )
@@ -779,9 +780,10 @@ export const createServiceRevisionService = ({ pool = defaultPool, mediaExists =
                 ]
             );
 
+            // Match the column type before the same parameter is used in the timestamp CASE.
             const decided = await client.query(
                 `UPDATE service_revisions
-                 SET status = $1,
+                 SET status = $1::varchar,
                      decided_at = CURRENT_TIMESTAMP,
                      applied_at = CASE WHEN $1 = 'approved' THEN CURRENT_TIMESTAMP ELSE applied_at END,
                      updated_at = CURRENT_TIMESTAMP

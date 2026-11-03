@@ -10,7 +10,7 @@ export const registerSchema = z.object({
         .regex(/[a-z]/, 'Debe incluir al menos una letra minúscula')
         .regex(/[0-9]/, 'Debe incluir al menos un número'),
     role: z.enum(['client', 'provider'], {
-        errorMap: () => ({ message: 'Role must be either client or provider' }),
+        error: 'Role must be either client or provider',
     }),
     fullName: z.string().optional(), // Optional for client, required logic for provider handled in controller or frontend
     phone: z.string().optional(),
@@ -68,7 +68,7 @@ export const validate = (schema) => (req, res, next) => {
             return res.status(400).json({
                 status: 'error',
                 message: 'Validation failed',
-                errors: error.errors.map((e) => ({
+                errors: error.issues.map((e) => ({
                     field: e.path[0],
                     message: e.message
                 })),

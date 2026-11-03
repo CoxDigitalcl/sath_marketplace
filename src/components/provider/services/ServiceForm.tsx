@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, FormEvent } from 'react';
+import React, { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
 import { Service, DailySchedule, ServiceAttribute, GalleryMediaItem, FreightVehicle } from '../../../types';
 import { X, Calendar, Video, Upload, PlayCircle, AlertCircle, CheckSquare, Square, Clock, Tag, Plus, Trash2, ChevronRight, HelpCircle, Copy, ImageIcon, Camera, Truck, MapPin } from 'lucide-react';
 import ToggleSwitch from '../../admin/provider-management/ToggleSwitch';
@@ -171,6 +171,22 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     // States for adding a category
     const [selectedCatId, setSelectedCatId] = useState('');
     const [selectedSub, setSelectedSub] = useState('');
+    const [categoryError, setCategoryError] = useState('');
+    const [categoryFeedback, setCategoryFeedback] = useState('');
+    const categorySectionRef = useRef<HTMLElement>(null);
+    const categorySelectRef = useRef<HTMLSelectElement>(null);
+    const specialtySelectRef = useRef<HTMLSelectElement>(null);
+    const addCategoryRef = useRef<HTMLButtonElement>(null);
+    const categoryAlreadyAdded = formData.categories.some(
+        category => category.categoryId === selectedCatId && category.subcategory === selectedSub
+    );
+
+    const clearCategorySelection = () => {
+        setSelectedCatId('');
+        setSelectedSub('');
+        setCategoryError('');
+        setCategoryFeedback('');
+    };
 
     // Cover image upload states
     const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -278,6 +294,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     };
 
     useEffect(() => {
+        clearCategorySelection();
         if (service) {
             setFormData(service);
             // Detect video source type from existing URL
@@ -344,26 +361,24 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     };
 
     const handleAddCategory = () => {
-        if (selectedCatId && selectedSub) {
-            // Check if already exists
-            const exists = formData.categories.some(c => c.categoryId === selectedCatId && c.subcategory === selectedSub);
-            if (!exists) {
-                setFormData(prev => ({
-                    ...prev,
-                    categories: [...prev.categories, { categoryId: selectedCatId, subcategory: selectedSub }]
-                }));
-                // Reset inputs
-                setSelectedCatId('');
-                setSelectedSub('');
-            }
-        }
+        if (!selectedCatId || !selectedSub || categoryAlreadyAdded) return;
+        setFormData(prev => ({
+            ...prev,
+            categories: [...prev.categories, { categoryId: selectedCatId, subcategory: selectedSub }]
+        }));
+        clearCategorySelection();
+        setCategoryFeedback(`Categoría agregada: ${serviceTaxonomy[selectedCatId].label}, ${selectedSub}.`);
+        categorySelectRef.current?.focus();
     };
 
     const handleRemoveCategory = (index: number) => {
+        const removed = formData.categories[index];
         setFormData(prev => ({
             ...prev,
             categories: prev.categories.filter((_, i) => i !== index)
         }));
+        setCategoryFeedback(`Categoría quitada: ${removed.subcategory}.`);
+        categorySelectRef.current?.focus();
     };
 
 
@@ -452,6 +467,20 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
 
+        // Catch an unfinished selection even when other categories are already saved.
+        if ((selectedCatId && !categoryAlreadyAdded) || formData.categories.length === 0) {
+            setCategoryError(selectedSub
+                ? 'Esta selección aún no está agregada. Pulsa «Agregar categoría» o descarta la selección para continuar.'
+                : selectedCatId
+                    ? 'Elige una especialidad y pulsa «Agregar categoría» para completar la selección.'
+                    : 'Agrega al menos una categoría: elige la categoría, luego la especialidad y pulsa «Agregar categoría».');
+            categorySectionRef.current?.scrollIntoView({ block: 'center' });
+            const target = selectedSub ? addCategoryRef.current
+                : selectedCatId ? specialtySelectRef.current : categorySelectRef.current;
+            target?.focus({ preventScroll: true });
+            return;
+        }
+
         // Freight-specific validation
         if (isFreightService) {
             if (!freightBasePrice || parseInt(freightBasePrice) <= 0) {
@@ -476,10 +505,6 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             toast.error("Debes subir una imagen de portada para tu servicio.");
             return;
         }
-        if (formData.categories.length === 0) {
-            toast.error("Debes agregar al menos una categoría.");
-            return;
-        }
 
         const saveData: any = { ...formData, id: service?.id || '' };
         if (isFreightService) {
@@ -497,7 +522,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
     };
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 space-y-6">
             <h2 className="text-xl font-bold text-gray-800">{service ? 'Editar Servicio' : 'Crear Nuevo Servicio'}</h2>
 
             <div className={`rounded-lg border p-4 ${providerCoverageSummary ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
@@ -524,20 +549,30 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
             </div>
 
             {/* Categorization Section */}
-            <div className="border-b pb-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <Tag size={20} className="mr-2 text-brand-secondary" /> Categorización
+            <section ref={categorySectionRef} aria-labelledby="service-categories-heading" className="border-b pb-6 mb-6">
+                <h3 id="service-categories-heading" className="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+                    <Tag size={20} aria-hidden="true" className="mr-2 text-brand-secondary" /> Categorías del servicio
                 </h3>
-                <p className="text-sm text-gray-500 mb-4">Agrega todas las categorías que correspondan a tu servicio. Esto mejora tu visibilidad en las búsquedas.</p>
+                <p id="category-instructions" className="text-sm text-gray-600 mb-4">
+                    Agrega al menos una categoría para que los clientes encuentren tu servicio. Puedes agregar más de una especialidad.
+                </p>
 
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label htmlFor="catSelect" className="block text-sm font-medium text-gray-700 mb-1">Categoría Principal</label>
+                <div className="grid gap-4 md:grid-cols-2">
+                    <div className="min-w-0">
+                        <label htmlFor="catSelect" className="block text-sm font-semibold text-gray-800 mb-2">1. Elige una categoría</label>
                         <select
                             id="catSelect"
+                            ref={categorySelectRef}
                             value={selectedCatId}
-                            onChange={(e) => { setSelectedCatId(e.target.value); setSelectedSub(''); }}
-                            className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-secondary focus:border-brand-secondary py-3 px-4"
+                            onChange={(e) => {
+                                setSelectedCatId(e.target.value);
+                                setSelectedSub('');
+                                setCategoryError('');
+                                setCategoryFeedback('');
+                            }}
+                            aria-describedby={`category-instructions category-selection-status${categoryError ? ' category-error' : ''}`}
+                            aria-invalid={Boolean(categoryError && !selectedCatId)}
+                            className="block min-h-12 w-full border border-gray-400 bg-white text-gray-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-800 py-3 pl-3 pr-8"
                         >
                             <option value="">Selecciona una categoría</option>
                             {Object.entries(serviceTaxonomy).map(([key, val]) => (
@@ -545,51 +580,92 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service, onSave, onCancel }) 
                             ))}
                         </select>
                     </div>
-                    <div className="flex-1 w-full">
-                        <label htmlFor="subSelect" className="block text-sm font-medium text-gray-700 mb-1">Especialidad (Subcategoría)</label>
+                    <div className="min-w-0">
+                        <label htmlFor="subSelect" className="block text-sm font-semibold text-gray-800 mb-2">2. Elige una especialidad</label>
                         <select
                             id="subSelect"
+                            ref={specialtySelectRef}
                             value={selectedSub}
-                            onChange={(e) => setSelectedSub(e.target.value)}
-                            className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-secondary focus:border-brand-secondary py-3 px-4 disabled:bg-gray-100 disabled:text-gray-400"
+                            onChange={(e) => {
+                                setSelectedSub(e.target.value);
+                                setCategoryError('');
+                                setCategoryFeedback('');
+                            }}
+                            aria-describedby={`category-selection-status${categoryError ? ' category-error' : ''}`}
+                            aria-invalid={Boolean(categoryError && selectedCatId && !selectedSub)}
+                            className="block min-h-12 w-full border border-gray-400 bg-white text-gray-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-800 py-3 pl-3 pr-8 disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
                             disabled={!selectedCatId}
                         >
-                            <option value="">Selecciona una especialidad</option>
+                            <option value="">{selectedCatId ? 'Selecciona una especialidad' : 'Primero elige una categoría'}</option>
                             {selectedCatId && serviceTaxonomy[selectedCatId]?.subcategories.map((sub) => (
                                 <option key={sub} value={sub}>{sub}</option>
                             ))}
                         </select>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleAddCategory}
-                        disabled={!selectedCatId || !selectedSub}
-                        className="bg-brand-primary hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-md shadow-sm disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                    >
-                        <Plus size={18} className="mr-1" /> Agregar
-                    </button>
                 </div>
 
-                {/* Selected Categories Chips */}
-                <div className="mt-4 flex flex-wrap gap-2">
-                    {formData.categories.map((cat, index) => (
-                        <div key={`${cat.categoryId}-${index}`} className="inline-flex items-center bg-gray-100 border border-gray-300 rounded-full px-3 py-1 text-sm">
-                            <span className="font-medium text-gray-700 mr-1">{serviceTaxonomy[cat.categoryId]?.label}:</span>
-                            <span className="text-gray-600">{cat.subcategory}</span>
-                            <button
-                                type="button"
-                                onClick={() => handleRemoveCategory(index)}
-                                className="ml-2 text-gray-400 hover:text-red-500 rounded-full p-0.5"
-                            >
-                                <X size={14} />
-                            </button>
-                        </div>
-                    ))}
-                    {formData.categories.length === 0 && (
-                        <p className="text-sm text-gray-400 italic">No has agregado ninguna categoría aún.</p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p id="category-selection-status" className="text-sm text-gray-700" role="status">
+                        {categoryAlreadyAdded
+                            ? 'Esta categoría y especialidad ya están agregadas. Elige otra especialidad.'
+                            : selectedSub
+                                ? 'Selección lista. Falta agregarla al servicio con el botón de abajo.'
+                                : selectedCatId
+                                    ? 'Ahora elige una especialidad para esta categoría.'
+                                    : 'Completa los pasos 1 y 2 para habilitar el botón.'}
+                    </p>
+                    {selectedCatId && (
+                        <button type="button" onClick={() => {
+                            clearCategorySelection();
+                            categorySelectRef.current?.focus();
+                        }} className="shrink-0 self-start rounded text-sm font-medium text-gray-700 underline underline-offset-4 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-800">
+                            Descartar selección
+                        </button>
                     )}
                 </div>
-            </div>
+                <button
+                    type="button"
+                    ref={addCategoryRef}
+                    onClick={handleAddCategory}
+                    disabled={!selectedCatId || !selectedSub || categoryAlreadyAdded}
+                    aria-describedby={`category-selection-status${categoryError ? ' category-error' : ''}`}
+                    className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-gray-800 px-5 py-3 font-semibold text-white hover:bg-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-800 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed sm:w-auto"
+                >
+                    <Plus size={18} aria-hidden="true" /> 3. Agregar categoría
+                </button>
+                {categoryError && (
+                    <p id="category-error" role="alert" className="mt-3 flex items-start gap-2 text-sm font-medium text-red-800">
+                        <AlertCircle size={18} aria-hidden="true" className="mt-0.5 shrink-0" /> {categoryError}
+                    </p>
+                )}
+                <p role="status" className="sr-only">{categoryFeedback}</p>
+
+                <div className="mt-5 border-t border-gray-200 pt-4">
+                    <h4 className="text-sm font-semibold text-gray-800">Categorías agregadas ({formData.categories.length})</h4>
+                    {formData.categories.length > 0 ? (
+                        <ul aria-label="Categorías agregadas" className="mt-2 space-y-2">
+                            {formData.categories.map((cat, index) => (
+                                <li key={`${cat.categoryId}-${cat.subcategory}`} className="flex items-center justify-between gap-3 rounded-md bg-gray-50 py-2 pl-3 pr-1 text-sm">
+                                    <div className="min-w-0 break-words">
+                                        <span className="block font-medium text-gray-800">{serviceTaxonomy[cat.categoryId]?.label || cat.categoryId}</span>
+                                        <span className="text-gray-700">{cat.subcategory}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveCategory(index)}
+                                        aria-label={`Quitar ${serviceTaxonomy[cat.categoryId]?.label || cat.categoryId}: ${cat.subcategory}`}
+                                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-red-50 hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-800"
+                                    >
+                                        <X size={18} aria-hidden="true" />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="mt-2 text-sm text-gray-600">Aún no agregas categorías. Tu selección aparecerá aquí al pulsar «Agregar categoría».</p>
+                    )}
+                </div>
+            </section>
 
             {/* Media Section */}
             <div className="border-b pb-6 mb-6">
