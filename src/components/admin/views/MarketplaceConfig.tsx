@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings, Tag, CreditCard, FileText, Users, Shield, Check, Info, Lock, KeyRound, Save, ExternalLink, List, Trash2, Plus, FileSignature, ShieldCheck, AlertCircle, ChevronDown, ChevronUp, Edit2, X, AlertTriangle, HelpCircle, Eye, Receipt, TestTube, RefreshCw, Share2, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import ToggleSwitch from '../provider-management/ToggleSwitch';
+import { AdminStepUpCancelledError, requestAdminStepUp, withAdminStepUp } from '../../../api/adminSecurity';
 import { buildLegalPoliciesSettingsRequest, readLegalPolicies } from '../../../utils/legalPolicies';
 import { ServiceAttribute, PolicyDocument, PolicyTarget } from '../../../types';
 
@@ -414,142 +415,168 @@ const CategorySettings = () => {
 
 
 // --- Sub-componente: Pasarela de Pago (Payku) ---
+type PaykuMode = 'sandbox' | 'production';
+
+interface PaykuCheckoutSettings {
+    mode: PaykuMode | null;
+    revision: number;
+    configured: Record<PaykuMode, boolean>;
+    webhookUrl: string;
+}
+
+const readPaykuCheckout = async (): Promise<PaykuCheckoutSettings> => {
+    const response = await adminFetch('/api/admin/payku/checkout', { cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo verificar el ambiente de Payku.');
+    return (await response.json()).data;
+};
+
 const PaymentGatewaySettings = () => {
-    const [config, setConfig] = useState({
-        environment: 'sandbox',
-        apiKey: '',
-        webhookSecret: '',
-        status: true,
-    });
-    const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState<PaykuCheckoutSettings | null>(null);
+    const [activity, setActivity] = useState<'loading' | 'saving' | null>('loading');
+    const [message, setMessage] = useState('');
+    const busy = useRef(false);
 
-    const fetchSettings = async () => {
+    const refresh = useCallback(async () => {
+        if (busy.current) return;
+        busy.current = true;
+        setActivity('loading');
+        setMessage('');
         try {
-            const response = await adminFetch('/api/admin/settings/payment');
-            if (response.ok) {
-                const data = await response.json();
-                if (data.status === 'success' && data.data) {
-                    // Check if empty, if so keep defaults
-                    if (Object.keys(data.data).length > 0) {
-                        setConfig(prev => ({
-                            ...prev,
-                            environment: data.data.payku_environment || 'sandbox',
-                            apiKey: data.data.payku_api_key || '',
-                            webhookSecret: data.data.payku_webhook_secret || '',
-                            status: data.data.payku_status ?? true
-                        }));
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Error loading payment settings:", error);
+            setSettings(await readPaykuCheckout());
+        } catch {
+            setSettings(null);
+            setMessage('No se pudo verificar el ambiente activo. Actualiza el estado para continuar.');
         } finally {
-            setLoading(false);
+            busy.current = false;
+            setActivity(null);
         }
-    };
-
-    useEffect(() => {
-        fetchSettings();
     }, []);
 
-    const saveSettings = async (newConfig: any) => {
+    useEffect(() => {
+        void refresh();
+        window.addEventListener('focus', refresh);
+        return () => window.removeEventListener('focus', refresh);
+    }, [refresh]);
+
+    const changeMode = async (production: boolean) => {
+        const mode = production ? 'production' : 'sandbox';
+        if (busy.current || !settings?.configured[mode] || mode === settings.mode) return;
+        const confirmation = production
+            ? '¿Activar Producción? Las nuevas compras podrán generar cobros reales.'
+            : '¿Activar Sandbox? Los nuevos pagos serán de prueba para todo el sitio.';
+        if (!window.confirm(confirmation)) return;
+
+        busy.current = true;
+        setActivity('saving');
+        setMessage('');
         try {
-            await adminFetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    group: 'payment',
-                    settings: {
-                        payku_environment: newConfig.environment,
-                        payku_api_key: newConfig.apiKey,
-                        payku_webhook_secret: newConfig.webhookSecret,
-                        payku_status: newConfig.status
-                    }
-                })
+            const token = await requestAdminStepUp();
+            const response = await adminFetch('/api/admin/payku/checkout', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...withAdminStepUp(token) },
+                body: JSON.stringify({ mode, revision: settings.revision })
             });
-            // Could add toast notification here
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'No se pudo cambiar el ambiente.');
+            setSettings(result.data);
         } catch (error) {
-            console.error("Error saving settings:", error);
+            if (error instanceof AdminStepUpCancelledError) return;
+            setMessage(error instanceof Error ? error.message : 'No se pudo cambiar el ambiente.');
+            try {
+                setSettings(await readPaykuCheckout());
+            } catch {
+                setSettings(null);
+            }
+        } finally {
+            busy.current = false;
+            setActivity(null);
         }
     };
 
-    const handleEnvChange = (isProduction: boolean) => {
-        if (window.confirm("¿Estás seguro? Cambiar el ambiente afectará todas las transacciones futuras.")) {
-            const newConfig = { ...config, environment: isProduction ? 'production' : 'sandbox' };
-            setConfig(newConfig);
-            saveSettings(newConfig); // Auto-save on toggle
-        }
-    };
-
-    const handleStatusChange = (isActive: boolean) => {
-        const newConfig = { ...config, status: isActive };
-        setConfig(newConfig);
-        saveSettings(newConfig); // Auto-save on toggle
-    };
-
-    const handleSaveManual = () => {
-        saveSettings(config);
-        alert("Configuración de pagos guardada.");
-    };
+    const mode = settings?.mode;
+    const production = mode === 'production';
+    const configured = Boolean(mode && settings?.configured[mode]);
+    const label = production ? 'PRODUCCIÓN · COBROS REALES' : 'SANDBOX · PAGOS DE PRUEBA';
+    const status = activity === 'loading'
+        ? 'Verificando ambiente en el servidor…'
+        : activity === 'saving'
+            ? 'Confirmando cambio con el servidor…'
+            : mode
+                ? configured ? label : 'CONFIGURACIÓN INCOMPLETA'
+                : settings ? 'AMBIENTE SIN CONFIGURAR' : 'AMBIENTE SIN VERIFICAR';
+    const statusColor = activity || !configured
+        ? 'border-gray-200 bg-gray-50 text-gray-900'
+        : production ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-sky-300 bg-sky-50 text-sky-950';
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-1">Configuración de Pasarela de Pago</h2>
-            <p className="text-sm text-gray-500 mb-4">Gestiona la conexión con Payku, el proveedor de pagos del marketplace.</p>
-            <div className="overflow-x-auto">
-                <table className="min-w-full">
-                    <tbody className="divide-y divide-gray-200">
-                        {Object.entries({
-                            'Proveedor': { value: 'Payku ✅', editable: false, description: 'Único soporte para V1' },
-                            'Ambiente': { value: config.environment, editable: true, type: 'toggle', description: 'Switch entre Sandbox (pruebas) y Producción (real).' },
-                            'API Key': { value: config.apiKey, editable: true, type: 'password', description: 'Clave secreta para autenticar con Payku. No compartir.', placeholder: 'sk_live_**********', field: 'apiKey' },
-                            'Webhook URL': { value: 'https://serviciosatuhogar.cl/webhooks/payku', editable: false, description: 'URL auto-generada para recibir notificaciones.' },
-                            'Webhook Secret': { value: config.webhookSecret, editable: true, type: 'password', description: 'Clave para validar la firma de los webhooks.', placeholder: 'whsec_*********', field: 'webhookSecret' },
-                            'Comisión Payku': { value: '1.1% + IVA', editable: false, description: 'Configurado directamente en tu dashboard de Payku.' },
-                            'Payout Delay': { value: '1 día hábil', editable: false, description: 'Tiempo de liquidación de fondos. Configurado en Payku.' },
-                            'Estado': { value: config.status ? 'Activo' : 'Inactivo', editable: true, type: 'toggle', description: 'Activa o desactiva la pasarela de pagos.' }
-                        }).map(([key, item]: [string, any]) => (
-                            <tr key={key}>
-                                <td className="px-4 py-4 align-top w-1/4">
-                                    <div className="font-semibold text-gray-800">{key}</div>
-                                    <div className="text-xs text-gray-500">{item.description}</div>
-                                </td>
-                                <td className="px-4 py-4 align-top">
-                                    {item.editable ? (
-                                        item.type === 'toggle' ? (
-                                            <div className="flex items-center gap-4">
-                                                <ToggleSwitch
-                                                    enabled={key === 'Ambiente' ? config.environment === 'production' : config.status}
-                                                    onChange={key === 'Ambiente' ? handleEnvChange : handleStatusChange}
-                                                />
-                                                <span className={`font-medium capitalize ${key === 'Ambiente' && config.environment === 'production' ? 'text-green-600' : key === 'Estado' && config.status ? 'text-green-600' : 'text-gray-600'}`}>
-                                                    {item.value}
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <input
-                                                type="password"
-                                                placeholder={item.placeholder}
-                                                value={item.value}
-                                                onChange={(e) => setConfig({ ...config, [item.field]: e.target.value })}
-                                                className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary/50"
-                                            />
-                                        )
-                                    ) : (
-                                        <span className="text-gray-700">{item.value}</span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+        <section className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-800">Configuración de Pasarela de Pago</h2>
+            <p className="mt-1 text-sm text-gray-600">Administra el ambiente de Payku para los nuevos pagos de todo el sitio.</p>
+
+            <div className={'mt-5 rounded-lg border p-4 ' + statusColor} role="status" aria-live="polite">
+                <p className="text-xs font-semibold uppercase tracking-wide">
+                    {activity ? 'Ambiente de pagos' : 'Ambiente activo'}
+                </p>
+                <p className="mt-1 text-base font-bold">{status}</p>
+                {mode && !activity && (
+                    <p className="mt-1 text-sm">
+                        {configured
+                            ? production ? 'Las nuevas compras se envían a Payku para cobros reales.' : 'Los nuevos pagos se simulan en el ambiente de pruebas de Payku.'
+                            : 'Ambiente seleccionado: ' + (production ? 'Producción' : 'Sandbox') + '. Faltan credenciales de Payku en el servidor.'}
+                    </p>
+                )}
             </div>
-            <div className="flex justify-end mt-6">
-                <button onClick={handleSaveManual} className="flex items-center gap-2 py-2 px-4 bg-brand-primary text-white font-semibold rounded-md hover:opacity-90 transition">
-                    <Save size={16} /> Guardar Cambios
+
+            <div className="mt-5 space-y-3">
+                {mode ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-medium text-gray-800">Sandbox</span>
+                        <ToggleSwitch
+                            enabled={production}
+                            onChange={changeMode}
+                            disabled={Boolean(activity) || !settings.configured[production ? 'sandbox' : 'production']}
+                            label="Activar Producción para los nuevos pagos"
+                        />
+                        <span className="text-sm font-medium text-gray-800">Producción</span>
+                    </div>
+                ) : settings && (
+                    <div className="flex flex-wrap gap-3">
+                        <button type="button" disabled={Boolean(activity) || !settings.configured.sandbox}
+                            onClick={() => changeMode(false)} className="rounded border px-3 py-2 text-sm disabled:opacity-50">
+                            Activar Sandbox
+                        </button>
+                        <button type="button" disabled={Boolean(activity) || !settings.configured.production}
+                            onClick={() => changeMode(true)} className="rounded border px-3 py-2 text-sm disabled:opacity-50">
+                            Activar Producción
+                        </button>
+                    </div>
+                )}
+                {settings && (!settings.configured.sandbox || !settings.configured.production) && (
+                    <p className="text-sm text-gray-600">
+                        Credenciales pendientes en el servidor para {settings.configured.sandbox
+                            ? 'Producción'
+                            : settings.configured.production ? 'Sandbox' : 'Sandbox y Producción'}.
+                    </p>
+                )}
+                {message && <p role="alert" className="text-sm text-red-700">{message}</p>}
+                <button
+                    type="button"
+                    onClick={refresh}
+                    disabled={Boolean(activity)}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-brand-primary disabled:opacity-50"
+                >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    Actualizar estado
                 </button>
             </div>
-        </div>
+
+            {settings && (
+                <dl className="mt-5 border-t border-gray-200 pt-4 text-sm">
+                    <dt className="font-medium text-gray-800">URL de notificación de Payku</dt>
+                    <dd className="mt-1 break-all text-gray-600">{settings.webhookUrl}</dd>
+                </dl>
+            )}
+        </section>
     );
 };
 

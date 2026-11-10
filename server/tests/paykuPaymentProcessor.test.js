@@ -40,7 +40,7 @@ const verificationPayload = (overrides = {}) => ({
     ...overrides,
 });
 
-const createHarness = ({ lockedBooking = bookingRow(), existingEvent = null, updateRows } = {}) => {
+const createHarness = ({ booking = bookingRow(), lockedBooking = booking, existingEvent = null, updateRows } = {}) => {
     const calls = [];
     const client = {
         async query(sql, params = []) {
@@ -79,7 +79,7 @@ const createHarness = ({ lockedBooking = bookingRow(), existingEvent = null, upd
             const normalized = String(sql).replace(/\s+/g, ' ').trim();
             calls.push({ target: 'pool', sql: normalized, params });
             if (normalized.includes('FROM bookings') && normalized.includes('transaction_id = $1')) {
-                return { rows: [bookingRow()], rowCount: 1 };
+                return { rows: [booking], rowCount: 1 };
             }
             throw new Error(`Unexpected pool query: ${normalized}`);
         },
@@ -89,8 +89,8 @@ const createHarness = ({ lockedBooking = bookingRow(), existingEvent = null, upd
         },
     };
 
-    const verifyTransaction = async (paymentKey) => {
-        calls.push({ target: 'payku', sql: 'VERIFY', params: [paymentKey] });
+    const verifyTransaction = async (paymentKey, mode) => {
+        calls.push({ target: 'payku', sql: 'VERIFY', params: [paymentKey, mode] });
         return verificationPayload();
     };
 
@@ -118,10 +118,38 @@ test('verifies remotely before opening the short database transaction and persis
     const updateSetClause = update.sql.split(' WHERE ')[0];
     assert.equal(updateSetClause.includes('transaction_id ='), false, 'the callback must never replace the stored payment key');
 
-    const outbox = harness.calls.find((call) => call.sql.startsWith('INSERT INTO payment_outbox'));
-    assert.ok(outbox);
-    assert.equal(outbox.params.length, 5);
+    const outbox = harness.calls.filter((call) => call.sql.startsWith('INSERT INTO payment_outbox'));
+    assert.equal(outbox.length, 2);
+    assert.ok(outbox[0].sql.includes('payment.notifications.requested'));
+    assert.ok(outbox[1].sql.includes('payment.invoice.requested'));
+    assert.deepEqual(harness.calls[verifyIndex].params, [PAYMENT_KEY, undefined]);
     assert.equal(harness.calls.some((call) => call.sql === 'COMMIT'), true);
+});
+
+test('verifies a sandbox payment in its original environment and does not request an invoice', async () => {
+    const harness = createHarness({ booking: bookingRow({ payku_mode: 'sandbox' }) });
+    const processor = createPaykuPaymentProcessor(harness);
+
+    const result = await processor.processWebhook(callbackPayload());
+
+    assert.equal(result.outcome, 'confirmed');
+    assert.deepEqual(harness.calls.find((call) => call.sql === 'VERIFY').params, [PAYMENT_KEY, 'sandbox']);
+    assert.equal(harness.calls.find((call) => call.sql.startsWith('INSERT INTO payment_webhook_events')).params[0], 'payku_sandbox');
+    assert.equal(harness.calls.some((call) => call.sql.includes('payment.invoice.requested')), false);
+});
+
+test('defers confirmation if the environment changes after verification', async () => {
+    const harness = createHarness({
+        booking: bookingRow({ payku_mode: 'production' }),
+        lockedBooking: bookingRow({ payku_mode: 'sandbox' }),
+    });
+    const processor = createPaykuPaymentProcessor(harness);
+
+    assert.deepEqual(await processor.processWebhook(callbackPayload()), {
+        outcome: 'retry', code: 'PAYMENT_ENVIRONMENT_RACE',
+    });
+    assert.deepEqual(harness.calls.find((call) => call.sql === 'VERIFY').params, [PAYMENT_KEY, 'production']);
+    assert.equal(harness.calls.some((call) => call.sql.startsWith('UPDATE bookings')), false);
 });
 
 test('rejects transaction substitution before calling Payku or opening a transaction', async () => {

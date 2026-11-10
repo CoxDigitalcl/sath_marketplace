@@ -57,7 +57,7 @@ export const createPaykuPaymentProcessor = ({
 
         try {
             const bookingResult = await pool.query(
-                `SELECT id, status, amount, transaction_id
+                `SELECT id, status, amount, transaction_id, payku_mode
                  FROM bookings
                  WHERE transaction_id = $1
                  LIMIT 2`,
@@ -90,7 +90,7 @@ export const createPaykuPaymentProcessor = ({
         let verification;
         try {
             // This network call deliberately happens before BEGIN/FOR UPDATE.
-            verification = await verifyTransaction(callback.paymentKey);
+            verification = await verifyTransaction(callback.paymentKey, booking.payku_mode ?? undefined);
         } catch (error) {
             logger.error('[Payku Webhook] Server-to-server verification unavailable', {
                 code: error?.code || 'PAYKU_UNAVAILABLE',
@@ -124,7 +124,7 @@ export const createPaykuPaymentProcessor = ({
             });
 
             const lockedResult = await client.query(
-                `SELECT id, status, amount, transaction_id
+                `SELECT id, status, amount, transaction_id, payku_mode
                  FROM bookings
                  WHERE transaction_id = $1
                  FOR UPDATE`,
@@ -141,6 +141,13 @@ export const createPaykuPaymentProcessor = ({
             }
 
             const lockedBooking = lockedResult.rows[0];
+            if (lockedBooking.payku_mode !== booking.payku_mode) {
+                await rollbackQuietly(client);
+                transactionStarted = false;
+                return { outcome: 'retry', code: 'PAYMENT_ENVIRONMENT_RACE' };
+            }
+            const isSandbox = lockedBooking.payku_mode === 'sandbox';
+            const provider = isSandbox ? 'payku_sandbox' : PROVIDER;
             const lockedVerification = validatePaykuPaymentVerification({
                 booking: lockedBooking,
                 callback,
@@ -158,7 +165,7 @@ export const createPaykuPaymentProcessor = ({
                  WHERE provider = $1
                    AND (payment_key = $2 OR gateway_transaction_id = $3)
                  LIMIT 2`,
-                [PROVIDER, verified.value.paymentKey, verified.value.gatewayTransactionId]
+                [provider, verified.value.paymentKey, verified.value.gatewayTransactionId]
             );
 
             if (existingResult.rows.length > 0) {
@@ -199,7 +206,7 @@ export const createPaykuPaymentProcessor = ({
                     currency
                  ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [
-                    PROVIDER,
+                    provider,
                     verified.value.paymentKey,
                     verified.value.gatewayTransactionId,
                     verified.value.bookingId,
@@ -235,17 +242,22 @@ export const createPaykuPaymentProcessor = ({
                     deduplication_key,
                     payload
                  ) VALUES
-                    ('payment.notifications.requested', $1, $2, $3::jsonb),
-                    ('payment.invoice.requested', $1, $4, $5::jsonb)
+                    ('payment.notifications.requested', $1, $2, $3::jsonb)
                  ON CONFLICT (deduplication_key) DO NOTHING`,
                 [
                     verified.value.bookingId,
-                    `${PROVIDER}:${verified.value.paymentKey}:notifications`,
-                    minimalPayload,
-                    `${PROVIDER}:${verified.value.paymentKey}:invoice`,
+                    `${provider}:${verified.value.paymentKey}:notifications`,
                     minimalPayload,
                 ]
             );
+            if (!isSandbox) {
+                await client.query(
+                    `INSERT INTO payment_outbox (event_type, aggregate_id, deduplication_key, payload)
+                     VALUES ('payment.invoice.requested', $1, $2, $3::jsonb)
+                     ON CONFLICT (deduplication_key) DO NOTHING`,
+                    [verified.value.bookingId, `${provider}:${verified.value.paymentKey}:invoice`, minimalPayload]
+                );
+            }
 
             await client.query('COMMIT');
             transactionStarted = false;

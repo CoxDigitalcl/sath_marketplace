@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { pool } from '../config/db.js';
 import logger from '../config/logger.js';
-import { getPaykuRuntimeConfig } from './paykuConfig.js';
+import { getPaykuConfigForMode, getPaykuRuntimeConfig, getPaykuWebhookUrl } from './paykuConfig.js';
+import { readPaykuCheckoutSettings } from './paykuCheckoutSettings.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 /**
@@ -11,8 +13,11 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  * @param {string} subject - Description of purchase
  * @returns {Promise<{id: string, url: string, token: string}>}
  */
-export const createTransaction = async (orderId, amount, email, subject, bookingCapability) => {
-    const { apiUrl, publicToken } = getPaykuRuntimeConfig();
+export const createTransaction = async (orderId, amount, email, subject, bookingCapability, checkoutPool = pool) => {
+    const { mode } = await readPaykuCheckoutSettings(checkoutPool);
+    const config = getPaykuConfigForMode(mode);
+    if (!config) throw new Error('Payku checkout credentials are unavailable.');
+    const { apiUrl, publicToken } = config;
 
     try {
         const payload = {
@@ -21,25 +26,28 @@ export const createTransaction = async (orderId, amount, email, subject, booking
             subject: subject,
             amount: amount,
             currency: 'CLP',
-            payment: 1, // 1 = Webpay / Flow / Etc (Check Payku Docs, usually 1 or 2)
+            payment: 1, // Webpay
             urlreturn: `${process.env.APP_URL || 'https://serviciosatuhogar.cl'}/checkout/success?order=${orderId}${bookingCapability ? `#cap=${encodeURIComponent(bookingCapability)}` : ''}`,
-            urlnotify: `${process.env.API_URL || 'https://serviciosatuhogar.cl/api'}/bookings/webhook/payku`
+            urlnotify: getPaykuWebhookUrl()
         };
 
         logger.info(`[Payku Service] Creating transaction for order ${orderId}, amount ${amount}. Notify: ${payload.urlnotify}`);
 
         const response = await axios.post(`${apiUrl}/transaction`, payload, {
+            timeout: 10000,
+            maxRedirects: 0,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${publicToken}`
             }
         });
 
-        if (response.data && response.data.url) {
+        if (response.data?.url && response.data.id) {
             return {
                 id: response.data.id,
                 url: response.data.url,
-                token: response.data.token
+                token: response.data.token,
+                mode,
             };
         }
 
@@ -56,7 +64,8 @@ export const createTransaction = async (orderId, amount, email, subject, booking
             return {
                 id: `mock_${Math.random()}`,
                 url: `${process.env.APP_URL || ''}/checkout/success?mock_payment=true&order=${orderId}${bookingCapability ? `#cap=${encodeURIComponent(bookingCapability)}` : ''}`,
-                token: 'mock_token'
+                token: 'mock_token',
+                mode,
             };
         }
 

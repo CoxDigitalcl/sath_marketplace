@@ -56,6 +56,7 @@ import {
     getServiceRevisionQueue,
 } from '../controllers/serviceRevisionController.js';
 import { blockClient, forcePasswordReset, deleteClientData, impersonateUser } from '../controllers/adminSecurityController.js';
+import { getPaykuCheckout, setPaykuCheckoutMode } from '../controllers/paykuCheckoutSettingsController.js';
 import { requireAdminStepUp } from '../middleware/adminStepUp.js';
 import { authenticateToken } from '../middleware/sessionAuth.js';
 
@@ -97,6 +98,8 @@ router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
 
 // Settings
+router.get('/payku/checkout', getPaykuCheckout);
+router.put('/payku/checkout', requireAdminStepUp, setPaykuCheckoutMode);
 router.get('/settings/:group', getSettings);
 router.post('/settings', updateSettings);
 // SimpleFactura Test

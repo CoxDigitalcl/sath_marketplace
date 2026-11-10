@@ -524,7 +524,8 @@ export const createBookingPaymentIntent = async ({
             pricing.totalAmount,
             payerEmail,
             subject,
-            capability
+            capability,
+            pool
         );
     } catch (error) {
         const publicError = {
@@ -549,6 +550,7 @@ export const createBookingPaymentIntent = async ({
             ...booking,
             scheduled_date: scheduledDate,
             transaction_id: transaction.id || null,
+            payku_mode: transaction.mode ?? null,
             pricing,
         },
         paymentUrl: transaction.url,
@@ -559,12 +561,13 @@ export const createBookingPaymentIntent = async ({
     try {
         await persistenceClient.query('BEGIN');
         if (transaction.id) {
-            await persistenceClient.query(
+            const boundPayment = await persistenceClient.query(
                 `UPDATE bookings
-                 SET transaction_id = $1, updated_at = CURRENT_TIMESTAMP
+                 SET transaction_id = $1, payku_mode = $3, updated_at = CURRENT_TIMESTAMP
                  WHERE id = $2 AND status = 'pending_payment'`,
-                [transaction.id, booking.id]
+                [transaction.id, booking.id, transaction.mode ?? null]
             );
+            if (boundPayment.rowCount !== 1) throw new Error('Booking is no longer awaiting payment.');
         }
         await persistenceClient.query(
             `UPDATE booking_idempotency

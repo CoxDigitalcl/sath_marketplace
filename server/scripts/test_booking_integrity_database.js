@@ -81,6 +81,7 @@ const run = async () => {
                 status VARCHAR(50) NOT NULL,
                 amount INTEGER NOT NULL,
                 transaction_id VARCHAR(255),
+                payku_mode TEXT,
                 scheduled_date TIMESTAMPTZ,
                 selected_times JSONB DEFAULT '[]'::jsonb,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
