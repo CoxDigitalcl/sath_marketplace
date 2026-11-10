@@ -1,5 +1,12 @@
 # Diseño de integridad de pagos Payku
 
+## Cambio de ambiente desde Administración
+
+1. Aplicar `server/scripts/migrations/add_payku_checkout_environment.sql` antes de desplegar el backend y su frontend. Es una migración aditiva. La selección inicial toma el ambiente actual del servidor.
+2. Configurar `PAYKU_SANDBOX_PUBLIC_TOKEN` y `PAYKU_PRODUCTION_PUBLIC_TOKEN` en cPanel con los tokens de las cuentas correspondientes. Conservar `PAYKU_MODE`, `PAYKU_API_URL` y `PAYKU_PUBLIC_TOKEN` del ambiente previo al despliegue para poder verificar las reservas históricas. Mantener disponibles ambos tokens mientras haya pagos pendientes en cualquiera de los ambientes.
+3. En **Configuración → Pasarela de Pago**, comprobar que el ambiente activo coincida con el ambiente previo al despliegue. El administrador confirma su contraseña y el servidor valida el token con una consulta de solo lectura a Payku antes de aplicar la selección a los próximos checkouts.
+4. Probar la creación y confirmación de una reserva en Sandbox. Si hay que volver a la versión anterior después de cambiar de ambiente, usar primero el panel para restablecer el ambiente previo y resolver las transacciones pendientes del otro ambiente. Conservar la tabla y la columna de la migración.
+
 Estado: revisión adversarial completada en modo degradado; integración pendiente.  
 Fecha: 2026-08-10
 

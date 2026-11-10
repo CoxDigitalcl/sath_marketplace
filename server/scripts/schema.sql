@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS bookings (
         CHECK (status IN ('pending_payment', 'in_escrow', 'service_completed', 'released', 'disputed', 'cancelled')),
     amount INTEGER NOT NULL CHECK (amount >= 0), -- Frozen price at time of booking
     transaction_id VARCHAR(255), -- External Payment Gateway ID
+    payku_mode TEXT CHECK (payku_mode IN ('sandbox', 'production')),
     scheduled_date TIMESTAMP WITH TIME ZONE,
     service_region_code VARCHAR(10),
     service_region_name VARCHAR(120),
@@ -246,6 +247,14 @@ CREATE TABLE IF NOT EXISTS bookings (
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS payku_checkout_settings (
+    singleton BOOLEAN PRIMARY KEY CHECK (singleton),
+    mode TEXT NOT NULL CHECK (mode IN ('sandbox', 'production')),
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    updated_by UUID NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_provider_profiles_coverage_region

@@ -1062,10 +1062,10 @@ export const deleteCategory = async (req, res, next) => {
 export const getSettings = async (req, res, next) => {
     try {
         const { group } = req.params;
-        let query = 'SELECT * FROM platform_settings';
+        let query = "SELECT * FROM platform_settings WHERE LEFT(key, 6) <> 'payku_'";
         let params = [];
         if (group && group !== 'all') {
-            query += ' WHERE group_name = $1';
+            query += ' AND group_name = $1';
             params.push(group);
         }
         const result = await pool.query(query, params);
@@ -1099,9 +1099,11 @@ export const getSettings = async (req, res, next) => {
 export const updateSettings = async (req, res, next) => {
     try {
         const { settings, group } = req.body;
-        console.log(`[Settings] Updating group: ${group}`, Object.keys(settings));
-
         const keys = Object.keys(settings);
+        if (group === 'payment' || keys.some(key => key.startsWith('payku_'))) {
+            return res.status(400).json({ status: 'error', message: 'Administra Payku desde la configuración de la pasarela.' });
+        }
+        console.log(`[Settings] Updating group: ${group}`, keys);
         const promises = keys.map(key => {
             const value = settings[key];
             // Ensure value is stringified if it's an object/array, though currently they seem to be strings/bools.
@@ -2150,6 +2152,7 @@ export const generateProviderMonthlySettlement = async (req, res, next) => {
             LEFT JOIN service_categories sc ON s.category = sc.id
             WHERE b.provider_id = $1
               AND b.status IN ('in_escrow', 'service_completed', 'released')
+              AND b.payku_mode IS DISTINCT FROM 'sandbox'
               AND COALESCE(b.paid_at, b.created_at)::date >= $2::date
               AND COALESCE(b.paid_at, b.created_at)::date <= $3::date
             ORDER BY COALESCE(b.paid_at, b.created_at) ASC

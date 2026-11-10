@@ -1,13 +1,13 @@
 import axios from 'axios';
 
 import logger from '../config/logger.js';
-import { getPaykuRuntimeConfig } from './paykuConfig.js';
+import { getPaykuVerificationConfig } from './paykuConfig.js';
 
 export { createTransaction } from './payku.legacy.js';
 
 const safeIdentifier = (value) => String(value ?? '').replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, 128);
 
-export const verifyTransaction = async (transactionId) => {
+export const verifyTransaction = async (transactionId, mode) => {
     const normalizedTransactionId = safeIdentifier(transactionId);
     if (!normalizedTransactionId) {
         const error = new Error('Invalid Payku transaction identifier.');
@@ -15,7 +15,9 @@ export const verifyTransaction = async (transactionId) => {
         throw error;
     }
 
-    const { apiUrl, publicToken } = getPaykuRuntimeConfig();
+    const config = getPaykuVerificationConfig(mode);
+    if (!config) throw new Error('Payku verification credentials are unavailable.');
+    const { apiUrl, publicToken } = config;
 
     try {
         const response = await axios.get(
@@ -26,6 +28,7 @@ export const verifyTransaction = async (transactionId) => {
                     Authorization: `Bearer ${publicToken}`,
                 },
                 timeout: 10000,
+                maxRedirects: 0,
             }
         );
         const status = typeof response.data?.status === 'string'
