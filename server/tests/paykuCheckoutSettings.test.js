@@ -100,6 +100,27 @@ test('keeps sandbox active when production credentials are missing or the provid
     assert.doesNotMatch(JSON.stringify(state), /sandbox-test-token|production-test-token/);
 });
 
+test('accepts Payku authenticated no-records responses for an account without transactions', async () => {
+    const pool = createSettingsPool();
+    const result = await updatePaykuCheckoutMode({
+        pool, env, mode: 'production', revision: 0, actorId,
+        http: { get: async () => ({ data: {
+            status: 'failed',
+            message_error: 'there are no records. filter date_init=2026-11-11,date_end=2026-11-11',
+        } }) },
+    });
+    assert.deepEqual(result, { mode: 'production', revision: 1 });
+});
+
+test('rejects Payku error envelopes other than the authenticated no-records response', async () => {
+    const pool = createSettingsPool();
+    await assert.rejects(updatePaykuCheckoutMode({
+        pool, env, mode: 'production', revision: 0, actorId,
+        http: { get: async () => ({ data: { status: 'failed', message_error: 'waiting token public' } }) },
+    }), { status: 502 });
+    assert.deepEqual(await readPaykuCheckoutSettings(pool, env), { mode: 'sandbox', revision: 0 });
+});
+
 test('rejects a mode change superseded while the provider is being checked', async () => {
     const pool = createSettingsPool();
     const switchMode = { pool, env, mode: 'production', revision: 0, actorId };

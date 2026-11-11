@@ -6,6 +6,10 @@ const isPaykuTransactionResponse = (data) => Array.isArray(data?.transaction) ||
     typeof data?.id === 'string' && typeof data.order === 'string' &&
     typeof data.status === 'string' && data.status !== 'failed' &&
     data.gateway_response && typeof data.gateway_response === 'object'
+) || (
+    // Authenticated accounts with no records return this envelope with HTTP 200.
+    data?.status === 'failed' && typeof data.message_error === 'string' &&
+    /^there are no records\. filter date_init=\d{4}-\d{2}-\d{2},date_end=\d{4}-\d{2}-\d{2}$/.test(data.message_error)
 );
 
 export class PaykuCheckoutSettingsError extends Error {
