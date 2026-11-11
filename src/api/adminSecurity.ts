@@ -18,7 +18,7 @@ const promptForAdminPassword = (): Promise<string> => new Promise((resolve, reje
     form.className = 'w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl';
     form.innerHTML = `
         <h2 id="admin-step-up-title" class="text-lg font-bold text-gray-900">Confirmación de seguridad</h2>
-        <p class="mt-2 text-sm text-gray-600">Confirma nuevamente tu contraseña de administrador para continuar.</p>
+        <p class="mt-2 text-sm text-gray-600">Ingresa la contraseña que utilizas para iniciar sesión en Servicios a tu Hogar.</p>
         <label for="admin-step-up-password" class="mt-5 block text-sm font-medium text-gray-800">Contraseña</label>
         <input id="admin-step-up-password" type="password" autocomplete="current-password" required maxlength="256"
             class="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20">
