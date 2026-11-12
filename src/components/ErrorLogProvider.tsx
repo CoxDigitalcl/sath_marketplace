@@ -28,6 +28,21 @@ interface ErrorLogProviderProps {
   children: ReactNode;
 }
 
+const isKnownWebKitMediaError = (event: ErrorEvent): boolean => {
+  const messagePattern = /^(?:ReferenceError: )?Can't find variable: EmptyRanges$/;
+  if (event.filename || !messagePattern.test(event.message) || typeof event.error?.stack !== 'string') {
+    return false;
+  }
+
+  // WebKit #318284 originates inside native media controls, without a script URL.
+  const frames = event.error.stack.trim().split(/\r?\n/);
+  const nativeFrame = /^(played|buffered|seekable|endTimeForBufferedRangeContainingCurrentTime|syncControl|handleEvent)@(?:\[native code\])?$/;
+  return frames.some(frame => /^(played|buffered|seekable)@/.test(frame)) &&
+    frames.some(frame => /^syncControl@/.test(frame)) &&
+    frames.some(frame => /^handleEvent@/.test(frame)) &&
+    frames.every(frame => nativeFrame.test(frame) || messagePattern.test(frame));
+};
+
 const ErrorLogProvider: React.FC<ErrorLogProviderProps> = ({ children }) => {
   const [errors, setErrors] = useState<LogEntry[]>([]);
 
@@ -47,6 +62,7 @@ const ErrorLogProvider: React.FC<ErrorLogProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      if (isKnownWebKitMediaError(event)) return;
       addError(event.message, event.error?.stack);
     };
 
