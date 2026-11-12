@@ -20,6 +20,6 @@ import { startPaymentOutboxWorker } from './paykuWebhookController.js';
 // Deployment order is explicit: apply both integrity migrations first.
 // Periodic retries remain opt-in so importing this module cannot emit invoices
 // or notifications in local/test environments.
-if (process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true') {
+if (process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true' || process.env.ENABLE_PAYMENT_NOTIFICATIONS_WORKER === 'true') {
     startPaymentOutboxWorker();
 }

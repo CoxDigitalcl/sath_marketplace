@@ -49,6 +49,9 @@ test('claims outbox events with SKIP LOCKED and marks successful effects once', 
     assert.equal(first.claimed + second.claimed, 1);
     assert.equal(handled, 1);
     assert.equal(queries.some((query) => query.sql.includes('FOR UPDATE SKIP LOCKED')), true);
+    const claim = queries.find(query => query.sql.startsWith('WITH claimable AS'));
+    assert.match(claim.sql, /event_type = ANY\(\$2::text\[\]\)/);
+    assert.deepEqual(claim.params[1], ['payment.notifications.requested']);
     assert.equal(queries.filter((query) => query.sql.startsWith('UPDATE payment_outbox SET processed_at')).length, 1);
 });
 

@@ -1,5 +1,13 @@
 # Reconciliación del outbox de pagos — 2026-08-16
 
+## Notificaciones de pagos reales del 12 de noviembre de 2026
+
+La operación en Producción mostró un cobro aprobado en Payku que seguía pendiente en la reserva por la referencia opcional `transaction_key`. Se mantienen las comprobaciones del pago guardado, orden, monto, moneda, identificador bancario y clave de verificación. Cuando Payku informa una referencia alternativa, se consulta esa referencia al proveedor y se exige que identifique el mismo pago. La recuperación de una reserva se realiza mediante el procesador transaccional existente y una nueva consulta a Payku.
+
+`ENABLE_PAYMENT_NOTIFICATIONS_WORKER=true` habilita únicamente los avisos de reserva al cliente y proveedor y sus notificaciones internas. El worker sólo reclama tipos de eventos con un handler habilitado. `ENABLE_PAYMENT_OUTBOX_WORKER=false` conserva pendiente la emisión de boletas hasta resolver la dependencia de SimpleFactura descrita en el registro histórico.
+
+El cambio afecta la validación de referencias de pago, la selección de eventos de la cola y la fecha chilena en los correos. La comprobación mínima incluye regresión de referencias y sustitución de pagos, exclusión de eventos de factura en PostgreSQL, reintentos sin duplicar avisos y verificación SMTP. La validación local no acredita el estado del pago ni la aceptación de sus mensajes por el servidor de correo, por eso esas dos comprobaciones se realizan en cPanel. La rama sigue exigiendo los checks protegidos de GitHub, con una nueva ejecución para el alcance actualizado y sin artifacts adicionales.
+
 ## Evidencia de producción
 
 La observabilidad de Etapa 7B detectó dos efectos pendientes creados por una única reserva Payku sandbox del 12 de agosto de 2026:

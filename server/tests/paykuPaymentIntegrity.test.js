@@ -125,12 +125,18 @@ test('accepts a callback transaction key when Payku omits it from verification',
   assert.equal(result.ok, true);
 });
 
-test('rejects a missing callback transaction key when verification provides one', () => {
+test('accepts an omitted optional callback transaction key when the mandatory verified facts match', () => {
   const payload = validPayload();
   delete payload.transaction_key;
 
   const result = validatePaykuPaymentVerification(buildContext({ payload }));
 
+  assert.equal(result.ok, true);
+});
+
+test('rejects an unverified alternative transaction key', () => {
+  const payload = { ...validPayload(), transaction_key: 'another-lookup-reference' };
+  const result = validatePaykuPaymentVerification(buildContext({ payload }));
   assert.deepEqual(result, { ok: false, code: 'VERIFIED_TRANSACTION_KEY_MISMATCH' });
 });
 

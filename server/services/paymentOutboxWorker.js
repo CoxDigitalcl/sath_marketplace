@@ -32,6 +32,7 @@ export const createPaymentOutboxWorker = ({ pool, handlers = {}, logger = noopLo
     if (!pool?.query) {
         throw new TypeError('A PostgreSQL-compatible pool is required');
     }
+    const eventTypes = Object.keys(handlers);
 
     const processBatch = async ({ batchSize = 10 } = {}) => {
         const safeBatchSize = Number.isSafeInteger(batchSize) && batchSize > 0
@@ -43,6 +44,7 @@ export const createPaymentOutboxWorker = ({ pool, handlers = {}, logger = noopLo
                 SELECT id
                 FROM payment_outbox
                 WHERE processed_at IS NULL
+                  AND event_type = ANY($2::text[])
                   AND available_at <= CURRENT_TIMESTAMP
                   AND (
                     locked_at IS NULL OR
@@ -62,7 +64,7 @@ export const createPaymentOutboxWorker = ({ pool, handlers = {}, logger = noopLo
                        outbox.aggregate_id,
                        outbox.payload,
                        outbox.attempt_count`,
-            [safeBatchSize]
+            [safeBatchSize, eventTypes]
         );
 
         let processed = 0;

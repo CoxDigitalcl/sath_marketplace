@@ -99,7 +99,24 @@ export const createPaykuPaymentProcessor = ({
             return { outcome: 'retry', code: 'PAYKU_VERIFICATION_UNAVAILABLE' };
         }
 
-        const verified = validatePaykuPaymentVerification({ booking, callback, verification });
+        let verified = validatePaykuPaymentVerification({ booking, callback, verification });
+        let transactionKeyVerified = false;
+        if (!verified.ok && verified.code === 'VERIFIED_TRANSACTION_KEY_MISMATCH') {
+            let aliasVerification;
+            try {
+                aliasVerification = await verifyTransaction(callback.transactionKey, booking.payku_mode ?? undefined);
+            } catch {
+                return { outcome: 'retry', code: 'PAYKU_VERIFICATION_UNAVAILABLE' };
+            }
+            const aliasResult = validatePaykuPaymentVerification({
+                booking,
+                callback: { ...callback, transactionKey: null },
+                verification: aliasVerification,
+            });
+            if (!aliasResult.ok) return { outcome: 'rejected', code: aliasResult.code };
+            transactionKeyVerified = true;
+            verified = validatePaykuPaymentVerification({ booking, callback, verification, transactionKeyVerified });
+        }
         if (!verified.ok) {
             logger.warn('[Payku Webhook] Verification facts did not match', {
                 code: verified.code,
@@ -152,6 +169,7 @@ export const createPaykuPaymentProcessor = ({
                 booking: lockedBooking,
                 callback,
                 verification,
+                transactionKeyVerified,
             });
             if (!lockedVerification.ok) {
                 await rollbackQuietly(client);
