@@ -178,7 +178,7 @@ export const sendCrossContactEmails = async ({
     send = sendEmail,
 }) => {
     // Format booking details if available
-    const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
     const scheduledTime = booking.selected_times ? (Array.isArray(booking.selected_times) ? booking.selected_times.join(', ') : booking.selected_times) : '';
     const amount = booking.amount ? `$${Number(booking.amount).toLocaleString('es-CL')}` : '';
 
@@ -283,7 +283,7 @@ export const sendGuestBookingConfirmation = async ({
     send = sendEmail,
     onSent = async () => {},
 }) => {
-    const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Por confirmar';
+    const scheduledDate = booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Por confirmar';
     const scheduledTime = booking.selected_times ? (Array.isArray(booking.selected_times) ? booking.selected_times.join(', ') : booking.selected_times) : '';
     const amount = booking.amount ? `$${Number(booking.amount).toLocaleString('es-CL')}` : '';
     const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://serviciosatuhogar.cl';

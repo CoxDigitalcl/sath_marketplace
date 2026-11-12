@@ -21,11 +21,15 @@ const processor = createPaykuPaymentProcessor({
     logger,
 });
 const effectHandlers = createPaymentConfirmationEffects({ pool, log: logger });
-const outboxWorker = createPaymentOutboxWorker({ pool, handlers: effectHandlers, logger });
+const enabledHandlers = process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true'
+    ? effectHandlers
+    : { 'payment.notifications.requested': effectHandlers['payment.notifications.requested'] };
+const outboxWorker = createPaymentOutboxWorker({ pool, handlers: enabledHandlers, logger });
 
 let stopOutboxWorker = null;
 
-const isPaymentOutboxEnabled = () => process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true';
+const isPaymentOutboxEnabled = () => process.env.ENABLE_PAYMENT_OUTBOX_WORKER === 'true' ||
+    process.env.ENABLE_PAYMENT_NOTIFICATIONS_WORKER === 'true';
 
 const notifyPaymentObservation = (message, context, severity) => {
     void AlertService.notify(new Error(message), context, severity).catch((error) => {

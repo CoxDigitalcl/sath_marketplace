@@ -138,6 +138,39 @@ test('verifies a sandbox payment in its original environment and does not reques
     assert.equal(harness.calls.some((call) => call.sql.includes('payment.invoice.requested')), false);
 });
 
+test('confirms an alternative callback transaction key only after Payku resolves it to the same payment', async () => {
+    const harness = createHarness({ booking: bookingRow({ payku_mode: 'production' }) });
+    const references = [];
+    const processor = createPaykuPaymentProcessor({ ...harness, verifyTransaction: async (reference, mode) => {
+        references.push([reference, mode]);
+        return verificationPayload();
+    } });
+    const result = await processor.processWebhook(callbackPayload({ transaction_key: 'alternative-reference' }));
+    assert.equal(result.outcome, 'confirmed');
+    assert.deepEqual(references, [[PAYMENT_KEY, 'production'], ['alternative-reference', 'production']]);
+    assert.equal(harness.calls.some(call => call.sql === 'COMMIT'), true);
+});
+
+test('rejects a transaction-key alias that resolves to a different booking', async () => {
+    const harness = createHarness();
+    const processor = createPaykuPaymentProcessor({ ...harness, verifyTransaction: async (reference) =>
+        reference === PAYMENT_KEY ? verificationPayload() : verificationPayload({ order: 'different-order' }) });
+    const result = await processor.processWebhook(callbackPayload({ transaction_key: 'alternative-reference' }));
+    assert.deepEqual(result, { outcome: 'rejected', code: 'VERIFIED_ORDER_MISMATCH' });
+    assert.equal(harness.calls.some(call => call.sql === 'BEGIN'), false);
+});
+
+test('retries instead of confirming when the transaction-key lookup is unavailable', async () => {
+    const harness = createHarness();
+    const processor = createPaykuPaymentProcessor({ ...harness, verifyTransaction: async (reference) => {
+        if (reference !== PAYMENT_KEY) throw new Error('Provider unavailable');
+        return verificationPayload();
+    } });
+    const result = await processor.processWebhook(callbackPayload({ transaction_key: 'alternative-reference' }));
+    assert.deepEqual(result, { outcome: 'retry', code: 'PAYKU_VERIFICATION_UNAVAILABLE' });
+    assert.equal(harness.calls.some(call => call.sql === 'BEGIN'), false);
+});
+
 test('defers confirmation if the environment changes after verification', async () => {
     const harness = createHarness({
         booking: bookingRow({ payku_mode: 'production' }),

@@ -73,7 +73,7 @@ export const validatePaykuWebhookPayload = (payload) => {
  * Binds a server-to-server Payku verification response to both the callback and
  * the immutable booking facts. Missing verification fields fail closed.
  */
-export const validatePaykuPaymentVerification = ({ booking, callback, verification }) => {
+export const validatePaykuPaymentVerification = ({ booking, callback, verification, transactionKeyVerified = false }) => {
     if (!booking || !callback || !verification || typeof verification !== 'object' || Array.isArray(verification)) {
         return failure('INVALID_VERIFICATION_CONTEXT');
     }
@@ -128,10 +128,10 @@ export const validatePaykuPaymentVerification = ({ booking, callback, verificati
     if (verifiedVerificationKey !== callback.verificationKey) {
         return failure('VERIFIED_VERIFICATION_KEY_MISMATCH');
     }
-    // Payku may include transaction_key in the callback while omitting it from
-    // the authoritative GET response. Compare it only when verification exposes
-    // a value; the mandatory gateway and verification identifiers above remain bound.
-    if (verifiedTransactionKey && callback.transactionKey !== verifiedTransactionKey) {
+    // transaction_key is optional and may use another lookup reference in the
+    // callback. A different supplied key must resolve to the same verified payment.
+    if (verifiedTransactionKey && callback.transactionKey &&
+        callback.transactionKey !== verifiedTransactionKey && !transactionKeyVerified) {
         return failure('VERIFIED_TRANSACTION_KEY_MISMATCH');
     }
 

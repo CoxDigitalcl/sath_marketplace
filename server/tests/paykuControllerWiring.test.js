@@ -31,7 +31,7 @@ test('public verification handler is read-only and emits private cache/index hea
 test('confirmed webhooks drain effects only when the outbox worker flag is enabled', async () => {
     const source = await readServerFile('controllers/paykuWebhookController.js');
 
-    assert.match(source, /const isPaymentOutboxEnabled = \(\) => process\.env\.ENABLE_PAYMENT_OUTBOX_WORKER === 'true'/);
+    assert.match(source, /const isPaymentOutboxEnabled = \(\) => process\.env\.ENABLE_PAYMENT_OUTBOX_WORKER === 'true' \|\|\s+process\.env\.ENABLE_PAYMENT_NOTIFICATIONS_WORKER === 'true'/);
     assert.match(source, /result\.outcome === 'confirmed' && isPaymentOutboxEnabled\(\)/);
 });
 
